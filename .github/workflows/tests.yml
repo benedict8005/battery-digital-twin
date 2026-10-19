@@ -1,0 +1,75 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.12"]
+        include:
+          # Oldest supported interpreter, on one platform.
+          - os: ubuntu-latest
+            python-version: "3.10"
+    env:
+      PYTHONUTF8: "1"          # consistent console encoding on Windows
+      DDE_BACKEND: pytorch
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements*.txt
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      # PyPI's default Linux/Windows torch wheels pull in the CUDA runtime (~2 GB). The runners
+      # have no GPU, so install the CPU build first; the later editable install then keeps it.
+      # macOS wheels are CPU/MPS already.
+      - name: Install CPU-only PyTorch (Linux / Windows)
+        if: runner.os != 'macOS'
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install package with dev extras
+        run: pip install -e ".[dev]"
+
+      - name: Show environment
+        run: |
+          python --version
+          python -c "import torch, deepxde, numpy, pandas; print('torch', torch.__version__, '| cuda', torch.cuda.is_available(), '| deepxde', deepxde.__version__, '| numpy', numpy.__version__, '| pandas', pandas.__version__)"
+
+      - name: Run tests
+        run: python -m pytest -q -ra --durations=10
+
+  minimal:
+    # The suite must also pass where PyTorch / DeepXDE are not installed: torch-dependent
+    # tests skip, everything else (ETL, config, CLI data commands, import isolation) runs.
+    name: ubuntu-latest / Python 3.12 without torch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install numpy pandas scipy matplotlib pytest
+      - name: Run tests (src/ is on the path via pyproject's pytest config)
+        run: python -m pytest -q -ra
