@@ -1,0 +1,10 @@
+# Python dependencies for the PINN battery digital twin (local pipeline).
+# Versions are intentionally unpinned: pin them (pip freeze) once you have a working environment.
+# Developed against Python 3.12; Python 3.10 or newer is required.
+
+torch
+deepxde
+numpy
+pandas
+scipy
+matplotlib

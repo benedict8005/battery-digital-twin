@@ -1,32 +1,34 @@
-# Python
+# --- Python ---
 __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
 venv/
-env/
-build/
-dist/
-
-# Notebooks
+.env
+.pytest_cache/
 .ipynb_checkpoints/
 
-# Secrets and local configuration
-.env
-.env.*
-!.env.example
+# --- Data (never commit raw datasets; see data/README.md) ---
+data/*
+!data/.gitkeep
+!data/README.md
+*.csv
+*.mat
 
-# Data and training outputs (generated or downloaded, not versioned)
-data/
-runs/
-artifacts*/
-mlruns/
+# --- Model checkpoints and training outputs ---
 *.pt
 *.pth
-*.ckpt
+battery_pinn_model*
+global_pinn_model*
+mlruns/
+mlartifacts/
+artifacts/
 
-# Editors and operating system
-.vscode/
+# --- Databricks / local tooling ---
+.databricks/
 .idea/
+.vscode/
 .DS_Store
-Thumbs.db
+
+# --- Experiment runs (scripts/run_baseline.sh) ---
+runs/
