@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+build/
+dist/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Data and training outputs (generated or downloaded, not versioned)
+data/
+runs/
+artifacts*/
+mlruns/
+*.pt
+*.pth
+*.ckpt
+
+# Editors and operating system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
