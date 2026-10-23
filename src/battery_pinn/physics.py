@@ -1,7 +1,7 @@
 """Coupled thermal / SEI-stability PDE system and Arrhenius helpers."""
+import deepxde as dde
 import numpy as np
 import torch
-import deepxde as dde
 
 from battery_pinn import config
 from battery_pinn.ocv import ocv_from_soc_torch

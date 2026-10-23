@@ -4,8 +4,13 @@ import pytest
 
 from battery_pinn import config, synthetic
 from battery_pinn.data import (
-    BatteryCoverageError, battery_report, build_points_and_targets, coverage_problems,
-    format_battery_report, load_dataset, representative_profile,
+    BatteryCoverageError,
+    battery_report,
+    build_points_and_targets,
+    coverage_problems,
+    format_battery_report,
+    load_dataset,
+    representative_profile,
 )
 
 

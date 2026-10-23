@@ -2,12 +2,13 @@
 import json
 import os
 
+import deepxde as dde
 import numpy as np
 import pandas as pd
 import torch
-import deepxde as dde
 
-from battery_pinn import config, device as device_selection
+from battery_pinn import config
+from battery_pinn import device as device_selection
 from battery_pinn.checkpoint import save_checkpoint
 from battery_pinn.data import build_points_and_targets, representative_profile
 from battery_pinn.identifiability import assess_log_a_sei, format_assessment, spread_initial_values

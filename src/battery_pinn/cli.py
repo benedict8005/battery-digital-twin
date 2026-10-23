@@ -7,7 +7,6 @@ from battery_pinn import config, synthetic
 from battery_pinn.data import load_dataset
 
 
-
 def _cmd_convert_mat(args):
     from battery_pinn.nasa_mat import convert_mat_dir
 
@@ -98,8 +97,14 @@ def _cmd_evaluate(args):
 def _cmd_abuse(args):
     import json
 
-    from battery_pinn.inference import (CRITERIA, DigitalTwin, abuse_test, format_ensemble_summary,
-                                        plot_abuse_test, summarise_ensemble)
+    from battery_pinn.inference import (
+        CRITERIA,
+        DigitalTwin,
+        abuse_test,
+        format_ensemble_summary,
+        plot_abuse_test,
+        summarise_ensemble,
+    )
 
     train_df = load_dataset(args.data)
     paths = _checkpoints(args.checkpoints)

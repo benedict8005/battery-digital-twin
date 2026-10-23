@@ -1,6 +1,6 @@
 """Restore a trained checkpoint, validate on held-out batteries, and run the abuse test."""
-import numpy as np
 import deepxde as dde
+import numpy as np
 
 from battery_pinn import config
 from battery_pinn.checkpoint import load_checkpoint
