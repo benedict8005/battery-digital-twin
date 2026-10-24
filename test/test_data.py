@@ -100,15 +100,16 @@ def test_held_out_missing_battery_uses_config_list_for_real_data(tmp_path):
 def test_held_out_missing_battery_is_a_warning_when_not_required(tmp_path):
     df, _ = synthetic.generate_train_and_held_out(n_batteries=2, n_held_out=0, cycles_per_battery=2)
     messages = []
-    clean = load_dataset(_write(tmp_path, df), expected_batteries=["S0001", "S0009"], required=False,
-                         log=messages.append)
+    clean = load_dataset(
+        _write(tmp_path, df), expected_batteries=["S0001", "S0009"], required=False, log=messages.append
+    )
     assert len(clean) == len(df)
     assert any(m.startswith("WARNING:") and "S0009: not present" in m for m in messages)
 
 
 def test_held_out_battery_with_zero_surviving_cycles_raises(tmp_path):
     df, _ = synthetic.generate_train_and_held_out(n_batteries=2, n_held_out=0, cycles_per_battery=2)
-    df.loc[df["battery_id"] == "S0002", "Re"] = np.nan   # every S0002 row is dropped by cleaning
+    df.loc[df["battery_id"] == "S0002", "Re"] = np.nan  # every S0002 row is dropped by cleaning
     path = _write(tmp_path, df)
     with pytest.raises(BatteryCoverageError, match=r"S0002: 0 of 2 cycles survived cleaning"):
         load_dataset(path, expected_batteries=["S0001", "S0002"], log=None)
@@ -118,13 +119,25 @@ def test_held_out_battery_with_zero_surviving_cycles_raises(tmp_path):
 
 
 def test_battery_report_covers_expected_batteries_and_extras():
-    raw = pd.DataFrame({"battery_id": ["A"] * 4 + ["B"] * 2 + ["X"] * 2,
-                        "cycle_number": [1, 1, 2, 2, 1, 1, 1, 2], "Re": [1, 1, np.nan, np.nan, 1, 1, 1, 1]})
+    raw = pd.DataFrame(
+        {
+            "battery_id": ["A"] * 4 + ["B"] * 2 + ["X"] * 2,
+            "cycle_number": [1, 1, 2, 2, 1, 1, 1, 2],
+            "Re": [1, 1, np.nan, np.nan, 1, 1, 1, 1],
+        }
+    )
     clean = raw.dropna()
     report = battery_report(raw, clean, expected_batteries=["A", "B", "C"])
     assert list(report) == ["A", "B", "C", "X"]
-    assert report["A"] == {"present": True, "expected": True, "cycles_in_file": 2, "cycles_kept": 1,
-                           "cycles_dropped": 1, "rows_in_file": 4, "rows_kept": 2}
+    assert report["A"] == {
+        "present": True,
+        "expected": True,
+        "cycles_in_file": 2,
+        "cycles_kept": 1,
+        "cycles_dropped": 1,
+        "rows_in_file": 4,
+        "rows_kept": 2,
+    }
     assert report["C"]["present"] is False and report["X"]["expected"] is False
     assert coverage_problems(report) == ["C: not present in the file"]
     text = format_battery_report(report, held_out_batteries=["B"])

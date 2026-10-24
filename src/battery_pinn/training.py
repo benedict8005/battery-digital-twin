@@ -1,4 +1,5 @@
 """Train the PINN (Adam, then optional L-BFGS) and write checkpoints locally."""
+
 import json
 import os
 
@@ -36,8 +37,13 @@ class LossTermLogger(dde.callbacks.Callback):
         state = self.model.train_state
         if state.loss_train is not None:
             losses = [float(v) for v in np.ravel(state.loss_train)]
-            self.rows.append({"step": int(state.step), "log10_A_sei": float(self.log_a_sei.detach().item()),
-                              **dict(zip(config.LOSS_TERM_NAMES, losses))})
+            self.rows.append(
+                {
+                    "step": int(state.step),
+                    "log10_A_sei": float(self.log_a_sei.detach().item()),
+                    **dict(zip(config.LOSS_TERM_NAMES, losses)),
+                }
+            )
 
     on_train_begin = on_train_end = _record  # the initial state and the last step, whatever the period
 
@@ -71,10 +77,24 @@ def predict(net, points):
     return out.cpu().numpy()
 
 
-def train_one_seed(df, seed, out_dir, iterations=15000, lbfgs_iterations=2000,
-                   num_domain=5000, num_boundary=1000, num_test=2000, display_every=1000,
-                   device="auto", anchor_subset=None, log_a_sei_init=None, num_initial=0,
-                   newton_cooling=False, learn_thermal=False, fix_log_a_sei=None):
+def train_one_seed(
+    df,
+    seed,
+    out_dir,
+    iterations=15000,
+    lbfgs_iterations=2000,
+    num_domain=5000,
+    num_boundary=1000,
+    num_test=2000,
+    display_every=1000,
+    device="auto",
+    anchor_subset=None,
+    log_a_sei_init=None,
+    num_initial=0,
+    newton_cooling=False,
+    learn_thermal=False,
+    fix_log_a_sei=None,
+):
     """Train one model on ``df`` and save ``battery_pinn_model_seed{seed}.pt`` in ``out_dir``.
 
     ``device`` is ``"auto"`` (CUDA when usable, else CPU), ``"cpu"`` or ``"cuda"`` (falls back
@@ -126,14 +146,15 @@ def train_one_seed(df, seed, out_dir, iterations=15000, lbfgs_iterations=2000,
     if thermal:
         trainable += list(thermal.values())
     pde = make_pde(profile, ocv_coeffs, log_a_sei, t_max_seconds, newton_cooling=newton_cooling, thermal=thermal)
-    options = {"newton_cooling": bool(newton_cooling), "learn_thermal": bool(learn_thermal),
-               "fix_log_a_sei": fix_log_a_sei}
+    options = {
+        "newton_cooling": bool(newton_cooling),
+        "learn_thermal": bool(learn_thermal),
+        "fix_log_a_sei": fix_log_a_sei,
+    }
     if any(options.values()) or fix_log_a_sei is not None:
         print("Physics options: " + ", ".join(f"{k}={v}" for k, v in options.items()))
 
-    param_geom = dde.geometry.Hypercube(
-        xmin=config.PARAM_BOUNDS_MIN, xmax=config.PARAM_BOUNDS_MAX
-    )
+    param_geom = dde.geometry.Hypercube(xmin=config.PARAM_BOUNDS_MIN, xmax=config.PARAM_BOUNDS_MAX)
     geomtime = dde.geometry.GeometryXTime(param_geom, dde.geometry.TimeDomain(0, 1))
 
     def on_initial_condition(x, on_initial):
@@ -145,14 +166,21 @@ def train_one_seed(df, seed, out_dir, iterations=15000, lbfgs_iterations=2000,
     obs_points, obs_values = build_points_and_targets(df)
     subset = select_anchor_subset(len(obs_points), anchor_subset, seed)
     fit_points, fit_values = (obs_points, obs_values) if subset is None else (obs_points[subset], obs_values[subset])
-    print(f"Observation points: {len(obs_points)}; used as anchors / data fit: {len(fit_points)}"
-          + ("" if subset is None else f" (anchor subset, seed {seed})"))
+    print(
+        f"Observation points: {len(obs_points)}; used as anchors / data fit: {len(fit_points)}"
+        + ("" if subset is None else f" (anchor subset, seed {seed})")
+    )
     observe_T = dde.icbc.PointSetBC(fit_points, fit_values.reshape(-1, 1), component=0)
 
     data = dde.data.TimePDE(
-        geomtime, pde, [ic_T, ic_c, observe_T],
-        num_domain=num_domain, num_boundary=num_boundary, num_initial=num_initial,
-        anchors=fit_points, num_test=num_test,
+        geomtime,
+        pde,
+        [ic_T, ic_c, observe_T],
+        num_domain=num_domain,
+        num_boundary=num_boundary,
+        num_initial=num_initial,
+        anchors=fit_points,
+        num_test=num_test,
     )
     net = dde.nn.FNN(config.NETWORK_LAYERS, "tanh", "Glorot normal")
     net.float()
@@ -160,8 +188,7 @@ def train_one_seed(df, seed, out_dir, iterations=15000, lbfgs_iterations=2000,
     model = dde.model.Model(data, net)
 
     logger = LossTermLogger(log_a_sei, display_every)
-    model.compile("adam", lr=1e-4, loss_weights=config.LOSS_WEIGHTS,
-                  external_trainable_variables=trainable)
+    model.compile("adam", lr=1e-4, loss_weights=config.LOSS_WEIGHTS, external_trainable_variables=trainable)
     model.train(iterations=iterations, display_every=display_every, callbacks=[logger])
 
     lbfgs_error = None
@@ -170,8 +197,7 @@ def train_one_seed(df, seed, out_dir, iterations=15000, lbfgs_iterations=2000,
         # non-finite and can leave the parameters mid-line-search; keep the Adam result then.
         adam_state = {k: v.detach().clone() for k, v in net.state_dict().items()}
         adam_extra = [v.detach().clone() for v in trainable]
-        model.compile("L-BFGS", loss_weights=config.LOSS_WEIGHTS,
-                      external_trainable_variables=trainable)
+        model.compile("L-BFGS", loss_weights=config.LOSS_WEIGHTS, external_trainable_variables=trainable)
         dde.optimizers.set_LBFGS_options(maxiter=lbfgs_iterations, ftol=1e-9)
         try:
             model.train(display_every=display_every, callbacks=[logger])
@@ -202,8 +228,7 @@ def train_one_seed(df, seed, out_dir, iterations=15000, lbfgs_iterations=2000,
     state = {k: v.detach().cpu() for k, v in net.state_dict().items()}
     log_a_sei_final = float(log_a_sei.detach().item())
     thermal_final = {k: float(v.detach().item()) for k, v in (thermal or {}).items()}
-    save_checkpoint(path, state, log_a_sei_final, ocv_coeffs,
-                    physics={**options, "thermal": thermal_final or None})
+    save_checkpoint(path, state, log_a_sei_final, ocv_coeffs, physics={**options, "thermal": thermal_final or None})
     return {
         "seed": seed,
         "checkpoint": path,
@@ -213,7 +238,7 @@ def train_one_seed(df, seed, out_dir, iterations=15000, lbfgs_iterations=2000,
         "anchor_subset": None if subset is None else int(len(subset)),
         "log10_A_sei_init": log_a_sei_init,
         "log10_A_sei": log_a_sei_final,
-        "A_sei": float(10 ** log_a_sei_final),
+        "A_sei": float(10**log_a_sei_final),
         "train_mae_c": train_mae_c,
         "lbfgs_error": lbfgs_error,
         "final_losses": final_losses,
@@ -235,8 +260,10 @@ def train_ensemble(df, seeds, out_dir, a_sei_init_spread=0.0, log_a_sei_init=Non
     for i, (seed, init) in enumerate(zip(seeds, inits)):
         print(f"\n=== Training seed {seed} ({i + 1}/{len(seeds)}), log10(A_sei) init {init:.3f} ===")
         res = train_one_seed(df, seed, out_dir, log_a_sei_init=init, **kwargs)
-        print(f"Seed {seed}: A_sei={res['A_sei']:.2e} (log10 {res['log10_A_sei']:.3f}, started {init:.3f}), "
-              f"train MAE ~{res['train_mae_c']:.2f} C")
+        print(
+            f"Seed {seed}: A_sei={res['A_sei']:.2e} (log10 {res['log10_A_sei']:.3f}, started {init:.3f}), "
+            f"train MAE ~{res['train_mae_c']:.2f} C"
+        )
         results.append(res)
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, "train_summary.json"), "w") as f:

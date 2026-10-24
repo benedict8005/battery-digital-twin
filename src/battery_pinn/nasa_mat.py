@@ -14,6 +14,7 @@ with that cycle's measurements -- so this module produces exactly that:
 * ``data/<uid>.csv``: the ``data`` struct's fields as columns (discharge: ``Voltage_measured,
   Current_measured, Temperature_measured, Current_load, Voltage_load, Time``).
 """
+
 import glob
 import os
 
@@ -23,8 +24,16 @@ import pandas as pd
 from battery_pinn import config
 
 METADATA_COLUMNS = [
-    "type", "start_time", "ambient_temperature", "battery_id", "test_id", "uid", "filename",
-    "Capacity", "Re", "Rct",
+    "type",
+    "start_time",
+    "ambient_temperature",
+    "battery_id",
+    "test_id",
+    "uid",
+    "filename",
+    "Capacity",
+    "Re",
+    "Rct",
 ]
 # Fields that are per-cycle scalars rather than measurement vectors.
 SCALAR_FIELDS = ("Capacity", "Re", "Rct")
@@ -77,8 +86,9 @@ def _measurements_frame(data):
     padded = {}
     for name, values in vectors.items():
         if len(values) < n:  # impedance spectra have fields of different lengths
-            values = np.concatenate([values, np.full(n - len(values), np.nan, dtype=values.dtype
-                                                       if values.dtype.kind == "c" else float)])
+            values = np.concatenate(
+                [values, np.full(n - len(values), np.nan, dtype=values.dtype if values.dtype.kind == "c" else float)]
+            )
         padded[name] = values
     return pd.DataFrame(padded)
 
@@ -104,18 +114,20 @@ def convert_mat_dir(mat_dir, out_dir, battery_ids=None, log=print):
             uid += 1
             filename = f"{uid:05d}.csv"
             _measurements_frame(data).to_csv(os.path.join(data_dir, filename), index=False)
-            records.append({
-                "type": ctype,
-                "start_time": str(time_vec),
-                "ambient_temperature": ambient,
-                "battery_id": battery_id,
-                "test_id": test_id,
-                "uid": uid,
-                "filename": filename,
-                "Capacity": data.get("Capacity", np.nan),
-                "Re": data.get("Re", np.nan),
-                "Rct": data.get("Rct", np.nan),
-            })
+            records.append(
+                {
+                    "type": ctype,
+                    "start_time": str(time_vec),
+                    "ambient_temperature": ambient,
+                    "battery_id": battery_id,
+                    "test_id": test_id,
+                    "uid": uid,
+                    "filename": filename,
+                    "Capacity": data.get("Capacity", np.nan),
+                    "Re": data.get("Re", np.nan),
+                    "Rct": data.get("Rct", np.nan),
+                }
+            )
         log(f"{battery_id}: {len(records) - n_before} cycles")
     meta = pd.DataFrame(records, columns=METADATA_COLUMNS)
     meta.to_csv(config.metadata_path(out_dir), index=False)

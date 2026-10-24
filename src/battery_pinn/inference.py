@@ -1,4 +1,5 @@
 """Restore a trained checkpoint, validate on held-out batteries, and run the abuse test."""
+
 import deepxde as dde
 import numpy as np
 
@@ -22,7 +23,7 @@ class DigitalTwin:
 
     @property
     def a_sei(self):
-        return 10 ** self.log_a_sei
+        return 10**self.log_a_sei
 
     def predict(self, points):
         return predict(self.net, points)
@@ -40,12 +41,11 @@ def evaluate(twin, df):
     points, targets = build_points_and_targets(df)
     err = (targets - twin.predict(points)[:, 0]) * config.TEMP_SCALE_C
     per_battery = {
-        bid: float(np.abs(err[df["battery_id"].values == bid]).mean())
-        for bid in sorted(df["battery_id"].unique())
+        bid: float(np.abs(err[df["battery_id"].values == bid]).mean()) for bid in sorted(df["battery_id"].unique())
     }
     return {
         "mae_c": float(np.abs(err).mean()),
-        "rmse_c": float(np.sqrt((err ** 2).mean())),
+        "rmse_c": float(np.sqrt((err**2).mean())),
         "per_battery_mae_c": per_battery,
     }
 
@@ -58,10 +58,15 @@ def abuse_test(twin, train_df, soh=0.8, re=0.5, ambient_start=25.0, ambient_end=
     if not in_domain.any():
         raise ValueError("The sweep has no points inside the trained ambient domain.")
 
-    inputs = np.column_stack((
-        np.zeros(n_points), np.full(n_points, soh), np.full(n_points, re),
-        ambient, np.full(n_points, 1.0),
-    )).astype(np.float32)
+    inputs = np.column_stack(
+        (
+            np.zeros(n_points),
+            np.full(n_points, soh),
+            np.full(n_points, re),
+            ambient,
+            np.full(n_points, 1.0),
+        )
+    ).astype(np.float32)
     res = twin.predict(inputs)
     core_temp = res[:, 0] * config.TEMP_SCALE_C + ambient
     sei_health = np.clip(res[:, 1], 0.0, 1.0)
@@ -130,8 +135,16 @@ def summarise_ensemble(results):
     }
     for key in ("threshold", "core_temp_max_c", "sei_min"):
         values = np.array([r[key] for r in results.values()], dtype=float)
-        out[key] = {"mean": float(values.mean()), "std": float(values.std()), "min": float(values.min()),
-                    "max": float(values.max())} if len(values) else None
+        out[key] = (
+            {
+                "mean": float(values.mean()),
+                "std": float(values.std()),
+                "min": float(values.min()),
+                "max": float(values.max()),
+            }
+            if len(values)
+            else None
+        )
     return out
 
 
@@ -144,11 +157,15 @@ def format_ensemble_summary(summary):
     ]
     if summary["threshold"]:
         t = summary["threshold"]
-        lines.append(f"SEI threshold (mean - 3 std of each model's own in-domain c): "
-                     f"{t['min']:.3f} .. {t['max']:.3f} (mean {t['mean']:.3f}, std {t['std']:.3f})")
+        lines.append(
+            f"SEI threshold (mean - 3 std of each model's own in-domain c): "
+            f"{t['min']:.3f} .. {t['max']:.3f} (mean {t['mean']:.3f}, std {t['std']:.3f})"
+        )
         ct, sm = summary["core_temp_max_c"], summary["sei_min"]
-        lines.append(f"Core temperature max (UNVALIDATED): {ct['min']:.1f} .. {ct['max']:.1f} °C; "
-                     f"SEI min: {sm['min']:.3f} .. {sm['max']:.3f}")
+        lines.append(
+            f"Core temperature max (UNVALIDATED): {ct['min']:.1f} .. {ct['max']:.1f} °C; "
+            f"SEI min: {sm['min']:.3f} .. {sm['max']:.3f}"
+        )
     lines.append("Caveats: " + CAVEATS + ".")
     return "\n".join(lines)
 
@@ -156,6 +173,7 @@ def format_ensemble_summary(summary):
 def plot_abuse_test(results, path):
     """Save an overlay of SEI health vs core temperature (in-domain solid, extrapolated dashed)."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -164,16 +182,17 @@ def plot_abuse_test(results, path):
     for i, (name, r) in enumerate(results.items()):
         m = r["in_domain"]
         color = colors[i % len(colors)]
-        plt.plot(r["core_temp"][m], r["sei_health"][m], color=color, linewidth=2,
-                 label=f"{name} ({r['verdict']})")
+        plt.plot(r["core_temp"][m], r["sei_health"][m], color=color, linewidth=2, label=f"{name} ({r['verdict']})")
         if not m.all():
             k = max(int(np.argmax(~m)) - 1, 0)
             plt.plot(r["core_temp"][k:], r["sei_health"][k:], "--", color=color, alpha=0.4)
     plt.axvline(config.CORE_TEMP_DANGER_C, color="r", linestyle="--", label="Critical temperature")
     plt.xlabel("Internal (core) temperature, degC -- UNVALIDATED, inferred through the physics")
     plt.ylabel("Chemical stability (c)")
-    plt.title(f"Abuse test: verdict excludes ambient > {config.AMBIENT_TRAINED_MAX_C:.0f} C "
-              "(dashed = extrapolated beyond the trained ambient range)")
+    plt.title(
+        f"Abuse test: verdict excludes ambient > {config.AMBIENT_TRAINED_MAX_C:.0f} C "
+        "(dashed = extrapolated beyond the trained ambient range)"
+    )
     plt.legend()
     plt.tight_layout()
     plt.savefig(path, dpi=120)

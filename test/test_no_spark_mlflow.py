@@ -8,6 +8,7 @@ Three independent checks:
    package imports and the data pipeline runs end to end.
 3. Packaging: neither ``pyproject.toml`` nor the requirements files declare them.
 """
+
 import ast
 import glob
 import importlib
@@ -54,9 +55,7 @@ def test_source_has_no_forbidden_imports_or_notebook_globals(path):
         tree = ast.parse(f.read(), filename=path)
     offenders = sorted({m for m in _imports(tree) if _top_level(m) in FORBIDDEN_PACKAGES})
     assert not offenders, f"{os.path.basename(path)} imports {offenders}"
-    names = sorted({
-        n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id in FORBIDDEN_GLOBALS
-    })
+    names = sorted({n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id in FORBIDDEN_GLOBALS})
     assert not names, f"{os.path.basename(path)} references notebook globals {names}"
 
 
@@ -76,8 +75,9 @@ class _Blocker(importlib.abc.MetaPathFinder):
 @pytest.fixture
 def blocked_imports():
     blocker = _Blocker()
-    saved = {k: v for k, v in sys.modules.items()
-             if _top_level(k) in FORBIDDEN_PACKAGES or _top_level(k) == "battery_pinn"}
+    saved = {
+        k: v for k, v in sys.modules.items() if _top_level(k) in FORBIDDEN_PACKAGES or _top_level(k) == "battery_pinn"
+    }
     for k in saved:
         del sys.modules[k]
     sys.meta_path.insert(0, blocker)

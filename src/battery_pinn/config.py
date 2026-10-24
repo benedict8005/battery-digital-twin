@@ -8,17 +8,18 @@ training protocol, so a value only ever has to change in one place.
 This module deliberately imports nothing but the standard library: it must stay importable
 without PyTorch, DeepXDE, Spark or MLflow.
 """
+
 import os
 
 # ----------------------------------------------------------------------------------------
 # Physics
 # ----------------------------------------------------------------------------------------
-R_GAS = 8.314            # gas constant, J/(mol*K)
-EA_SEI = 1.35e5          # activation energy, J/mol
-H_SEI = 2.57e5           # enthalpy of reaction, J/kg
-RHO = 2000.0             # density, kg/m3
-CP = 1000.0              # heat capacity, J/(kg*K)
-K_COND = 1.0             # thermal conductivity, W/(m*K)
+R_GAS = 8.314  # gas constant, J/(mol*K)
+EA_SEI = 1.35e5  # activation energy, J/mol
+H_SEI = 2.57e5  # enthalpy of reaction, J/kg
+RHO = 2000.0  # density, kg/m3
+CP = 1000.0  # heat capacity, J/(kg*K)
+K_COND = 1.0  # thermal conductivity, W/(m*K)
 
 # Opt-in physics variants (off by default; the defaults reproduce the original PDE exactly).
 # Newton cooling: a volumetric surface heat-loss sink  -NEWTON_COOLING_COEFF * (T - T_ambient)
@@ -61,8 +62,12 @@ ABUSE_ENSEMBLE_SIZE = 10
 # Default ("fast") training protocol, validated against the full-anchor protocol in
 # docs/RESULTS.md: it reproduces it within seed noise at ~1/30 of the cost.
 TRAIN_DEFAULTS = {
-    "iterations": 2000, "lbfgs_iterations": 200, "num_domain": 1000, "num_boundary": 200,
-    "anchor_subset": 2000, "display_every": 100,
+    "iterations": 2000,
+    "lbfgs_iterations": 200,
+    "num_domain": 1000,
+    "num_boundary": 200,
+    "anchor_subset": 2000,
+    "display_every": 100,
 }
 
 # ----------------------------------------------------------------------------------------
@@ -81,11 +86,36 @@ EXCLUDED_BATTERIES = ["B0049", "B0050", "B0051", "B0052"]
 # Per-battery discharge cutoff voltage (V). A cycle is truncated at the first sample whose
 # measured voltage drops below this value.
 CUTOFF_VOLTAGE_MAP = {
-    "B0005": 2.7, "B0006": 2.5, "B0007": 2.2, "B0018": 2.5, "B0025": 2.0, "B0026": 2.2,
-    "B0027": 2.5, "B0028": 2.7, "B0029": 2.0, "B0030": 2.2, "B0031": 2.5, "B0032": 2.7,
-    "B0033": 2.0, "B0034": 2.2, "B0036": 2.7, "B0038": 2.2, "B0039": 2.5, "B0040": 2.7,
-    "B0041": 2.0, "B0042": 2.2, "B0043": 2.5, "B0044": 2.7, "B0045": 2.0, "B0046": 2.2,
-    "B0047": 2.5, "B0048": 2.7, "B0053": 2.0, "B0054": 2.2, "B0055": 2.5, "B0056": 2.7,
+    "B0005": 2.7,
+    "B0006": 2.5,
+    "B0007": 2.2,
+    "B0018": 2.5,
+    "B0025": 2.0,
+    "B0026": 2.2,
+    "B0027": 2.5,
+    "B0028": 2.7,
+    "B0029": 2.0,
+    "B0030": 2.2,
+    "B0031": 2.5,
+    "B0032": 2.7,
+    "B0033": 2.0,
+    "B0034": 2.2,
+    "B0036": 2.7,
+    "B0038": 2.2,
+    "B0039": 2.5,
+    "B0040": 2.7,
+    "B0041": 2.0,
+    "B0042": 2.2,
+    "B0043": 2.5,
+    "B0044": 2.7,
+    "B0045": 2.0,
+    "B0046": 2.2,
+    "B0047": 2.5,
+    "B0048": 2.7,
+    "B0053": 2.0,
+    "B0054": 2.2,
+    "B0055": 2.5,
+    "B0056": 2.7,
 }
 # Used for any battery that is not in CUTOFF_VOLTAGE_MAP.
 DEFAULT_CUTOFF_VOLTAGE = 2.7
@@ -93,11 +123,36 @@ DEFAULT_CUTOFF_VOLTAGE = 2.7
 # The 30 batteries the model is built from, split by battery (never by cycle) into a
 # 24-battery training set and a 6-battery held-out set.
 TARGET_BATTERIES = [
-    "B0005", "B0006", "B0007", "B0018", "B0025", "B0026", "B0027",
-    "B0028", "B0029", "B0030", "B0031", "B0032", "B0033", "B0034",
-    "B0036", "B0038", "B0039", "B0040", "B0041", "B0042", "B0043",
-    "B0044", "B0045", "B0046", "B0047", "B0048", "B0053", "B0054",
-    "B0055", "B0056",
+    "B0005",
+    "B0006",
+    "B0007",
+    "B0018",
+    "B0025",
+    "B0026",
+    "B0027",
+    "B0028",
+    "B0029",
+    "B0030",
+    "B0031",
+    "B0032",
+    "B0033",
+    "B0034",
+    "B0036",
+    "B0038",
+    "B0039",
+    "B0040",
+    "B0041",
+    "B0042",
+    "B0043",
+    "B0044",
+    "B0045",
+    "B0046",
+    "B0047",
+    "B0048",
+    "B0053",
+    "B0054",
+    "B0055",
+    "B0056",
 ]
 HELD_OUT_BATTERIES = ["B0025", "B0030", "B0036", "B0042", "B0047", "B0056"]
 TRAIN_BATTERIES = [b for b in TARGET_BATTERIES if b not in HELD_OUT_BATTERIES]
@@ -118,27 +173,53 @@ AMBIENT_GROUPS_C = (4.0, 24.0, 43.0)
 # See capacity_floor() and docs/CHANGELOG.md item 22.
 MIN_VALID_CAPACITY_AH = 1.4
 MIN_CAPACITY_FRACTION_OF_MAX = 0.7
-MIN_SAMPLES_PER_CYCLE = 50     # cycles with fewer samples after truncation are skipped
-BINS_PER_CYCLE = 50            # each kept cycle is downsampled to this many points
+MIN_SAMPLES_PER_CYCLE = 50  # cycles with fewer samples after truncation are skipped
+BINS_PER_CYCLE = 50  # each kept cycle is downsampled to this many points
 
 # ----------------------------------------------------------------------------------------
 # Column names
 # ----------------------------------------------------------------------------------------
 # Columns the raw metadata.csv must provide (matched case-insensitively when read).
 RAW_METADATA_COLUMNS = [
-    "battery_id", "type", "filename", "ambient_temperature", "start_time", "capacity", "Re", "Rct",
+    "battery_id",
+    "type",
+    "filename",
+    "ambient_temperature",
+    "start_time",
+    "capacity",
+    "Re",
+    "Rct",
 ]
 # Columns each raw per-cycle discharge CSV must provide.
 RAW_CYCLE_COLUMNS = ["Time", "Voltage_measured", "Current_measured", "Temperature_measured"]
 # Column order of the processed tables (final_pinn_training_data / held_out_pinn_validation_data).
 PROCESSED_COLUMNS = [
-    "bin", "Time", "Voltage_measured", "Current_measured", "Temperature_measured", "SoC",
-    "battery_id", "cycle_number", "SoH", "Re", "Rct", "ambient_temperature", "Time_normalized",
+    "bin",
+    "Time",
+    "Voltage_measured",
+    "Current_measured",
+    "Temperature_measured",
+    "SoC",
+    "battery_id",
+    "cycle_number",
+    "SoH",
+    "Re",
+    "Rct",
+    "ambient_temperature",
+    "Time_normalized",
 ]
 # Columns the training / inference code needs; rows missing any of them are dropped.
 REQUIRED_COLUMNS = [
-    "Time", "Time_normalized", "Current_measured", "Voltage_measured", "SoC",
-    "SoH", "Re", "Temperature_measured", "ambient_temperature", "battery_id",
+    "Time",
+    "Time_normalized",
+    "Current_measured",
+    "Voltage_measured",
+    "SoC",
+    "SoH",
+    "Re",
+    "Temperature_measured",
+    "ambient_temperature",
+    "battery_id",
 ]
 
 # ----------------------------------------------------------------------------------------
@@ -226,5 +307,8 @@ def is_mat_folder(path):
     """True if ``path`` holds NASA ``B*.mat`` files and no ``metadata.csv``."""
     import glob
 
-    return (os.path.isdir(path) and not os.path.exists(metadata_path(path))
-            and bool(glob.glob(os.path.join(path, "B*.mat"))))
+    return (
+        os.path.isdir(path)
+        and not os.path.exists(metadata_path(path))
+        and bool(glob.glob(os.path.join(path, "B*.mat")))
+    )

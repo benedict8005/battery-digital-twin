@@ -16,6 +16,7 @@ ensemble of seeds has been trained:
   *started* from different values (``train --a-sei-init-spread``) and still converged to the
   same one; with a common starting point it is merely consistency.
 """
+
 import math
 
 from battery_pinn import config
@@ -47,9 +48,13 @@ def assess_log_a_sei(finals, inits=None, max_spread=None, min_movement=None, max
     finals = [float(v) for v in finals]
     if inits is None:
         inits = [None] * len(finals)
-    out = {"n_seeds": len(finals), "final": _stats(finals) if finals else None,
-           "max_spread_decades": max_spread, "min_movement_decades": min_movement,
-           "max_runaway_decades": max_runaway}
+    out = {
+        "n_seeds": len(finals),
+        "final": _stats(finals) if finals else None,
+        "max_spread_decades": max_spread,
+        "min_movement_decades": min_movement,
+        "max_runaway_decades": max_runaway,
+    }
     known_inits = [i for i in inits if i is not None]
     out["initial"] = _stats(known_inits) if known_inits else None
     shifts = [f - i for f, i in zip(finals, inits) if i is not None]
@@ -61,30 +66,41 @@ def assess_log_a_sei(finals, inits=None, max_spread=None, min_movement=None, max
     moved = bool(shifts) and max(abs(s) for s in shifts) >= min_movement
     if shifts and not moved:
         out["status"] = "not identifiable"
-        out["reason"] = (f"every seed stayed within {min_movement} decades of its initial value "
-                         f"(max shift {max(abs(s) for s in shifts):.3f}); the loss is insensitive to A_sei")
+        out["reason"] = (
+            f"every seed stayed within {min_movement} decades of its initial value "
+            f"(max shift {max(abs(s) for s in shifts):.3f}); the loss is insensitive to A_sei"
+        )
         return out
     if shifts and min(abs(s) for s in shifts) > max_runaway and len({s > 0 for s in shifts}) == 1:
         direction = "down (towards A_sei = 0, which zeroes the SEI residual)" if shifts[0] < 0 else "up"
         out["status"] = "not identifiable"
-        out["reason"] = (f"runaway: every seed moved {min(abs(s) for s in shifts):.1f}-{max(abs(s) for s in shifts):.1f} "
-                         f"decades {direction} regardless of its start; the optimiser is switching the SEI term off, "
-                         f"not calibrating it")
+        out["reason"] = (
+            f"runaway: every seed moved {min(abs(s) for s in shifts):.1f}-{max(abs(s) for s in shifts):.1f} "
+            f"decades {direction} regardless of its start; the optimiser is switching the SEI term off, "
+            f"not calibrating it"
+        )
         return out
     if out["final"]["range"] > max_spread:
         out["status"] = "not identifiable"
-        out["reason"] = (f"seeds disagree: final log10(A_sei) spans {out['final']['range']:.2f} decades "
-                         f"(> {max_spread}); the value depends on the seed")
+        out["reason"] = (
+            f"seeds disagree: final log10(A_sei) spans {out['final']['range']:.2f} decades "
+            f"(> {max_spread}); the value depends on the seed"
+        )
         return out
     spread_starts = out["initial"] is not None and out["initial"]["range"] > max_spread
     out["status"] = "identifiable" if spread_starts else "consistent across seeds"
     out["reason"] = (
         f"seeds started {out['initial']['range']:.2f} decades apart and ended within "
-        f"{out['final']['range']:.2f} decades (mean {out['final']['mean']:.2f})" if spread_starts else
-        f"final log10(A_sei) agree within {out['final']['range']:.2f} decades (mean {out['final']['mean']:.2f})"
+        f"{out['final']['range']:.2f} decades (mean {out['final']['mean']:.2f})"
+        if spread_starts
+        else f"final log10(A_sei) agree within {out['final']['range']:.2f} decades (mean {out['final']['mean']:.2f})"
         + ("" if shifts else "; initial values unknown")
-        + ("; all seeds started from the same value, so this shows consistency, not identifiability "
-           "-- rerun with --a-sei-init-spread" if out["initial"] is not None and not spread_starts else "")
+        + (
+            "; all seeds started from the same value, so this shows consistency, not identifiability "
+            "-- rerun with --a-sei-init-spread"
+            if out["initial"] is not None and not spread_starts
+            else ""
+        )
     )
     return out
 
@@ -93,7 +109,9 @@ def format_assessment(a):
     lines = [f"A_sei identifiability ({a['n_seeds']} seeds): {a['status'].upper()} -- {a['reason']}"]
     if a.get("final"):
         f = a["final"]
-        lines.append(f"  final log10(A_sei): mean {f['mean']:.3f}, std {f['std']:.3f}, range [{f['min']:.3f}, {f['max']:.3f}]")
+        lines.append(
+            f"  final log10(A_sei): mean {f['mean']:.3f}, std {f['std']:.3f}, range [{f['min']:.3f}, {f['max']:.3f}]"
+        )
     if a.get("initial"):
         i = a["initial"]
         lines.append(f"  initial log10(A_sei): range [{i['min']:.3f}, {i['max']:.3f}]")

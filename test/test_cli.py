@@ -1,4 +1,5 @@
 """CLI wiring. The parser and the data commands need neither PyTorch nor DeepXDE."""
+
 import pandas as pd
 import pytest
 
@@ -23,8 +24,14 @@ def test_train_defaults_are_the_fast_protocol_on_processed_data():
     assert args.seeds == config.ENSEMBLE_SEEDS == list(range(10))
     assert args.out == config.DEFAULT_ARTIFACTS_DIR
     assert args.data == config.DEFAULT_TRAIN_CSV and args.data.endswith("train.csv")
-    assert (args.iterations, args.lbfgs_iterations, args.num_domain, args.num_boundary, args.anchor_subset,
-            args.display_every) == (2000, 200, 1000, 200, 2000, 100)
+    assert (
+        args.iterations,
+        args.lbfgs_iterations,
+        args.num_domain,
+        args.num_boundary,
+        args.anchor_subset,
+        args.display_every,
+    ) == (2000, 200, 1000, 200, 2000, 100)
     assert args.device == "auto"
     assert build_parser().parse_args(["train", "--anchor-subset", "all"]).anchor_subset is None
     with pytest.raises(SystemExit):
@@ -44,9 +51,25 @@ def test_evaluate_and_abuse_test_default_to_processed_tables():
 def test_train_convergence_flags():
     args = build_parser().parse_args(["train"])
     assert args.a_sei_init_spread == 0.0 and args.log_a_sei_init is None and args.num_initial == 0
-    args = build_parser().parse_args(["train", "--anchor-subset", "4000", "--a-sei-init-spread", "1.0",
-                                      "--log-a-sei-init", "21.5", "--display-every", "100"])
-    assert (args.anchor_subset, args.a_sei_init_spread, args.log_a_sei_init, args.display_every) == (4000, 1.0, 21.5, 100)
+    args = build_parser().parse_args(
+        [
+            "train",
+            "--anchor-subset",
+            "4000",
+            "--a-sei-init-spread",
+            "1.0",
+            "--log-a-sei-init",
+            "21.5",
+            "--display-every",
+            "100",
+        ]
+    )
+    assert (args.anchor_subset, args.a_sei_init_spread, args.log_a_sei_init, args.display_every) == (
+        4000,
+        1.0,
+        21.5,
+        100,
+    )
 
 
 @pytest.mark.parametrize("command", ["train", "demo"])
@@ -102,11 +125,23 @@ def test_prepare_data_capacity_floor_flags(raw_dataset, tmp_path, capsys):
     from battery_pinn.data import BatteryCoverageError
 
     with pytest.raises(BatteryCoverageError, match="B0056"):
-        main(["prepare-data", "--raw", raw_dataset, "--out", str(tmp_path / "legacy"), "--min-capacity-fraction", "none"])
+        main(
+            ["prepare-data", "--raw", raw_dataset, "--out", str(tmp_path / "legacy"), "--min-capacity-fraction", "none"]
+        )
     assert not (tmp_path / "legacy").exists()
     # ... unless explicitly allowed for legacy-comparison runs, which downgrades it to a warning.
-    main(["prepare-data", "--raw", raw_dataset, "--out", str(tmp_path / "legacy"), "--min-capacity-fraction", "none",
-          "--allow-missing-held-out"])
+    main(
+        [
+            "prepare-data",
+            "--raw",
+            raw_dataset,
+            "--out",
+            str(tmp_path / "legacy"),
+            "--min-capacity-fraction",
+            "none",
+            "--allow-missing-held-out",
+        ]
+    )
     held_out = pd.read_csv(tmp_path / "legacy" / config.HELD_OUT_FILE)
     assert "B0056" not in set(held_out["battery_id"])
     assert "WARNING: --allow-missing-held-out set" in capsys.readouterr().out
@@ -127,20 +162,38 @@ def test_convert_mat_then_prepare_data(tmp_path, capsys):
     write_fake_mat(mat_dir / "B0005.mat", "B0005")
     main(["convert-mat", "--mat-dir", str(mat_dir), "--out", str(tmp_path / "raw")])
     meta = pd.read_csv(tmp_path / "raw" / "metadata.csv")
-    assert list(meta.columns) == ["type", "start_time", "ambient_temperature", "battery_id", "test_id",
-                                  "uid", "filename", "Capacity", "Re", "Rct"]
+    assert list(meta.columns) == [
+        "type",
+        "start_time",
+        "ambient_temperature",
+        "battery_id",
+        "test_id",
+        "uid",
+        "filename",
+        "Capacity",
+        "Re",
+        "Rct",
+    ]
     assert meta["type"].tolist() == ["charge", "impedance", "discharge", "discharge"]
     assert meta["start_time"].iloc[2].startswith("[")
     assert (tmp_path / "raw" / "data" / "00003.csv").is_file()
     cycle = pd.read_csv(tmp_path / "raw" / "data" / "00003.csv")
-    assert list(cycle.columns) == ["Voltage_measured", "Current_measured", "Temperature_measured",
-                                   "Current_load", "Voltage_load", "Time"]
+    assert list(cycle.columns) == [
+        "Voltage_measured",
+        "Current_measured",
+        "Temperature_measured",
+        "Current_load",
+        "Voltage_load",
+        "Time",
+    ]
     assert "B0005: 4 cycles" in capsys.readouterr().out
 
 
 def test_prepare_data_and_generate_data_share_one_schema(raw_dataset, tmp_path):
     main(["prepare-data", "--raw", raw_dataset, "--out", str(tmp_path / "real")])
-    main(["generate-data", "--out", str(tmp_path / "synthetic"), "--batteries", "3", "--held-out", "1", "--cycles", "2"])
+    main(
+        ["generate-data", "--out", str(tmp_path / "synthetic"), "--batteries", "3", "--held-out", "1", "--cycles", "2"]
+    )
     real = pd.read_csv(tmp_path / "real" / config.TRAIN_FILE)
     synthetic = pd.read_csv(tmp_path / "synthetic" / "train.csv")
     assert list(real.columns) == list(synthetic.columns)

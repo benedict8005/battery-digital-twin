@@ -1,4 +1,5 @@
 """Coupled thermal / SEI-stability PDE system and Arrhenius helpers."""
+
 import deepxde as dde
 import numpy as np
 import torch
@@ -45,12 +46,16 @@ def make_pde(profile, ocv_coeffs, log_a_sei, t_max_seconds, newton_cooling=False
     * ``thermal`` (from :func:`make_thermal_variables`) replaces ``K_COND``, ``RHO * CP`` and
       ``h`` by trainable log10 variables.
     """
+
     def constants():
         # Evaluated inside the residual so the autograd graph is rebuilt on every call.
         if thermal is None:
             return float(config.K_COND), float(config.RHO * config.CP), float(config.NEWTON_COOLING_COEFF)
-        return (torch.pow(10.0, thermal["log10_k_cond"]), torch.pow(10.0, thermal["log10_thermal_mass"]),
-                torch.pow(10.0, thermal["log10_newton_coeff"]))
+        return (
+            torch.pow(10.0, thermal["log10_k_cond"]),
+            torch.pow(10.0, thermal["log10_thermal_mass"]),
+            torch.pow(10.0, thermal["log10_newton_coeff"]),
+        )
 
     def sei_thermal_pde(x, y):
         k_cond, thermal_mass, newton_coeff = constants()
@@ -72,8 +77,10 @@ def make_pde(profile, ocv_coeffs, log_a_sei, t_max_seconds, newton_cooling=False
         joule_heat = torch.abs(I * (V - U_ocv))
 
         exponent = -config.EA_SEI / (config.R_GAS * T_safe + 1e-6)
-        rate = actual_A_sei * c_safe * torch.exp(
-            torch.clamp(exponent, min=config.EXPONENT_CLAMP_MIN, max=config.EXPONENT_CLAMP_MAX)
+        rate = (
+            actual_A_sei
+            * c_safe
+            * torch.exp(torch.clamp(exponent, min=config.EXPONENT_CLAMP_MIN, max=config.EXPONENT_CLAMP_MAX))
         )
 
         sources = k_cond * dT_xx * config.TEMP_SCALE_C + joule_heat + config.H_SEI * rate

@@ -1,4 +1,5 @@
 """Open-circuit-voltage curve: polynomial fit and torch evaluation."""
+
 import numpy as np
 import torch
 

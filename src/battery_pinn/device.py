@@ -7,6 +7,7 @@ cannot initialise -- and (2) resetting PyTorch's default device so that every te
 creates lands there too. ``auto`` therefore means CUDA when it works and CPU otherwise; MPS
 is never selected automatically because DeepXDE's L-BFGS path is not reliable on it.
 """
+
 import torch
 
 DEVICE_CHOICES = ("auto", "cpu", "cuda")
@@ -37,16 +38,14 @@ def resolve_device(requested="auto", log=print):
 
     if not torch.cuda.is_available():
         if requested == "cuda" and log is not None:
-            log("WARNING: --device cuda requested but PyTorch reports no usable CUDA device; "
-                "falling back to CPU.")
+            log("WARNING: --device cuda requested but PyTorch reports no usable CUDA device; falling back to CPU.")
         return torch.device("cpu")
 
     cuda = torch.device("cuda")
     error = probe(cuda)
     if error is not None:
         if log is not None:
-            log(f"WARNING: CUDA is reported available but cannot run a tensor op ({error}); "
-                "falling back to CPU.")
+            log(f"WARNING: CUDA is reported available but cannot run a tensor op ({error}); falling back to CPU.")
         return torch.device("cpu")
     return cuda
 

@@ -1,4 +1,5 @@
 """Loading and cleaning of the processed per-cycle dataset, with per-battery coverage checks."""
+
 import numpy as np
 import pandas as pd
 
@@ -78,8 +79,10 @@ def format_battery_report(report, title="Per-battery coverage", held_out_batteri
         elif r["cycles_dropped"]:
             flag = f"  ({r['cycles_dropped']} cycles dropped: missing/non-finite values)"
         extra = "" if r["expected"] else "  (not a designated battery)"
-        lines.append(f"  {bid}{tag}: {r['cycles_kept']}/{r['cycles_in_file']} cycles kept, "
-                     f"{r['rows_kept']}/{r['rows_in_file']} rows{flag}{extra}")
+        lines.append(
+            f"  {bid}{tag}: {r['cycles_kept']}/{r['cycles_in_file']} cycles kept, "
+            f"{r['rows_kept']}/{r['rows_in_file']} rows{flag}{extra}"
+        )
     return "\n".join(lines)
 
 
@@ -129,12 +132,14 @@ def build_points_and_targets(df):
     """Surface (x=1) network inputs and the scaled T_delta target for each row."""
     from battery_pinn.config import TEMP_SCALE_C
 
-    points = np.column_stack((
-        np.ones(len(df)),
-        df["SoH"].values / 100.0,
-        df["Re"].values * 10.0,
-        df["ambient_temperature"].values,
-        df["Time_normalized"].values,
-    )).astype(np.float32)
+    points = np.column_stack(
+        (
+            np.ones(len(df)),
+            df["SoH"].values / 100.0,
+            df["Re"].values * 10.0,
+            df["ambient_temperature"].values,
+            df["Time_normalized"].values,
+        )
+    ).astype(np.float32)
     targets = (df["Temperature_measured"].values - df["ambient_temperature"].values) / TEMP_SCALE_C
     return points, targets.astype(np.float32)

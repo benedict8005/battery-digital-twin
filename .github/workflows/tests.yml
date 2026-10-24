@@ -75,7 +75,7 @@ jobs:
         run: python -m pytest -q -ra
 
   lint:
-    # Static checks beside the tests. `ruff format --check` joins once the code base is formatted.
+    # Static checks beside the tests.
     name: lint and type check
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -89,5 +89,7 @@ jobs:
       - run: pip install numpy pandas scipy matplotlib pytest ruff mypy pandas-stubs scipy-stubs
       - name: ruff check
         run: ruff check .
+      - name: ruff format
+        run: ruff format --check .
       - name: mypy
         run: mypy
