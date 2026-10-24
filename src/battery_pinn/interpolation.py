@@ -1,4 +1,5 @@
 """GPU-native linear interpolation of the representative discharge profile."""
+
 import torch
 
 # Two breakpoints closer than this fraction of the breakpoint range are treated as the same

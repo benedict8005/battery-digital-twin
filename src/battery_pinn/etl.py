@@ -29,6 +29,7 @@ Two deliberate deviations, both documented in ``docs/CHANGELOG.md`` item 21:
 * The per-battery survival report counts kept *cycles*; the original compared kept rows
   (cycles x bins) with candidate cycles, so its "fewer than 20 %" flag never fired.
 """
+
 import os
 import re
 from collections import Counter
@@ -118,8 +119,13 @@ def _timestamp(y, m, d, hr, mi, sec):
     try:
         whole, micros = _seconds_to_whole_and_micros(sec)
         return pd.Timestamp(
-            year=int(y), month=int(m), day=int(d), hour=int(hr), minute=int(mi),
-            second=whole, microsecond=micros,
+            year=int(y),
+            month=int(m),
+            day=int(d),
+            hour=int(hr),
+            minute=int(mi),
+            second=whole,
+            microsecond=micros,
         )
     except (ValueError, OverflowError):
         return pd.NaT
@@ -134,9 +140,7 @@ def parse_start_time(start_time):
     with fewer than six tokens get NaN components and a NaT timestamp, which is what the
     Spark array indexing and ``to_timestamp`` returned for them.
     """
-    tokens = [
-        _NUMBER_RE.findall(str(v)) if pd.notna(v) else [] for v in start_time
-    ]
+    tokens = [_NUMBER_RE.findall(str(v)) if pd.notna(v) else [] for v in start_time]
     comps = np.full((len(tokens), 6), np.nan)
     for i, parts in enumerate(tokens):
         if len(parts) >= 6:
@@ -148,7 +152,8 @@ def parse_start_time(start_time):
     out.insert(0, "n_parts", [len(p) for p in tokens])
     out["start_datetime"] = pd.Series(
         [_timestamp(*row) for row in out[_TIME_COMPONENTS].itertuples(index=False)],
-        index=start_time.index, dtype="datetime64[ns]",
+        index=start_time.index,
+        dtype="datetime64[ns]",
     )
     return out
 
@@ -158,9 +163,7 @@ def _assign_cycle_numbers(df):
 
     NULL components sort first (Spark's ASC default); exact ties keep file order.
     """
-    ordered = df.sort_values(
-        ["battery_id"] + _TIME_COMPONENTS, kind="mergesort", na_position="first"
-    )
+    ordered = df.sort_values(["battery_id"] + _TIME_COMPONENTS, kind="mergesort", na_position="first")
     cycle_number = ordered.groupby("battery_id", sort=False).cumcount() + 1
     return df.assign(cycle_number=cycle_number.reindex(df.index).astype(int))
 
@@ -177,8 +180,7 @@ def build_silver_discharge(bronze, excluded_batteries=None):
     df = _silver_base(bronze, excluded_batteries)
     df = df[df["type"] == "discharge"]
     df = _assign_cycle_numbers(df)
-    cols = ["battery_id", "type", "filename", "ambient_temperature", "capacity",
-            "start_datetime", "cycle_number"]
+    cols = ["battery_id", "type", "filename", "ambient_temperature", "capacity", "start_datetime", "cycle_number"]
     return df[cols].reset_index(drop=True)
 
 
@@ -206,8 +208,7 @@ def _latest_impedance_at_or_before(discharge, impedance):
     re_out = np.full(len(discharge), np.nan)
     rct_out = np.full(len(discharge), np.nan)
     imp_by_battery = {
-        bid: grp.dropna(subset=["start_datetime"]).sort_values(
-            ["start_datetime", "cycle_number"], kind="mergesort")
+        bid: grp.dropna(subset=["start_datetime"]).sort_values(["start_datetime", "cycle_number"], kind="mergesort")
         for bid, grp in impedance.groupby("battery_id", sort=False)
     }
     for pos, (bid, ts) in enumerate(zip(discharge["battery_id"], discharge["start_datetime"])):
@@ -235,8 +236,17 @@ def build_gold(silver_discharge, silver_impedance):
     gold = gold.sort_values("start_datetime", kind="mergesort", na_position="first")
     gold = gold.drop_duplicates("filename", keep="first")
     gold = gold.sort_values(["battery_id", "cycle_number"], kind="mergesort")
-    cols = ["battery_id", "type", "filename", "ambient_temperature", "start_datetime",
-            "cycle_number", "capacity", "Re", "Rct"]
+    cols = [
+        "battery_id",
+        "type",
+        "filename",
+        "ambient_temperature",
+        "start_datetime",
+        "cycle_number",
+        "capacity",
+        "Re",
+        "Rct",
+    ]
     return gold[cols].reset_index(drop=True)
 
 
@@ -275,8 +285,7 @@ def downsample_cycle(cycle, num_bins=None):
     return cycle.groupby("bin").agg(_BIN_AGGREGATIONS).reset_index()
 
 
-def process_cycle(cycle, meta, max_capacity, cutoff_voltage, min_samples=None,
-                  capacity_floor_ah=None, num_bins=None):
+def process_cycle(cycle, meta, max_capacity, cutoff_voltage, min_samples=None, capacity_floor_ah=None, num_bins=None):
     """Turn one raw discharge cycle into its downsampled, labelled rows.
 
     ``meta`` is the cycle's gold-table row (``battery_id``, ``cycle_number``, ``capacity``,
@@ -314,9 +323,17 @@ def process_cycle(cycle, meta, max_capacity, cutoff_voltage, min_samples=None,
 SKIP_REASONS = ("file_not_found", "too_short", "low_capacity")
 
 
-def build_feature_table(gold, raw_dir, target_batteries=None, held_out_batteries=None,
-                        cutoff_map=None, default_cutoff=None, min_capacity=config.UNSET,
-                        min_capacity_fraction=config.UNSET, **cycle_kwargs):
+def build_feature_table(
+    gold,
+    raw_dir,
+    target_batteries=None,
+    held_out_batteries=None,
+    cutoff_map=None,
+    default_cutoff=None,
+    min_capacity=config.UNSET,
+    min_capacity_fraction=config.UNSET,
+    **cycle_kwargs,
+):
     """Run the per-cycle feature engineering over every gold row of the target batteries.
 
     Returns ``(dataset, summary)``. ``dataset`` is the concatenation of all kept cycles (an
@@ -352,8 +369,12 @@ def build_feature_table(gold, raw_dir, target_batteries=None, held_out_batteries
             reason, frame = "file_not_found", None
         else:
             frame, reason = process_cycle(
-                load_cycle_file(path), row, max_caps.loc[bid], cutoff_map.get(bid, default_cutoff),
-                capacity_floor_ah=floors[bid], **cycle_kwargs,
+                load_cycle_file(path),
+                row,
+                max_caps.loc[bid],
+                cutoff_map.get(bid, default_cutoff),
+                capacity_floor_ah=floors[bid],
+                **cycle_kwargs,
             )
         if frame is None:
             skip_counts[reason] += 1
@@ -398,9 +419,11 @@ def coverage_problems(summary):
             problems.append(f"{bid}: not present in the raw metadata")
         elif r["kept"] == 0:
             reasons = ", ".join(f"{n} {why}" for why, n in r["dropped"].items() if n)
-            problems.append(f"{bid}: 0 of {r['candidates']} cycles survived ({reasons}; "
-                            f"capacity floor {r['capacity_floor_ah']:.3f} Ah, best cycle "
-                            f"{r['max_capacity_ah']:.3f} Ah)")
+            problems.append(
+                f"{bid}: 0 of {r['candidates']} cycles survived ({reasons}; "
+                f"capacity floor {r['capacity_floor_ah']:.3f} Ah, best cycle "
+                f"{r['max_capacity_ah']:.3f} Ah)"
+            )
     return problems
 
 
@@ -427,8 +450,10 @@ def format_summary(summary):
         f"Skipped (low capacity):   {skips['low_capacity']}",
     ]
     if sum(skips.values()) > 0.5 * total:
-        lines.append("WARNING: over half of all cycles were skipped -- check CUTOFF_VOLTAGE_MAP / "
-                     "MIN_VALID_CAPACITY_AH / MIN_CAPACITY_FRACTION_OF_MAX in battery_pinn/config.py.")
+        lines.append(
+            "WARNING: over half of all cycles were skipped -- check CUTOFF_VOLTAGE_MAP / "
+            "MIN_VALID_CAPACITY_AH / MIN_CAPACITY_FRACTION_OF_MAX in battery_pinn/config.py."
+        )
 
     lines.append("--- Per-battery cycle survival (every designated battery) ---")
     missing, zero_kept = [], []
@@ -445,9 +470,11 @@ def format_summary(summary):
             zero_kept.append(bid)
         elif r["kept"] < 0.2 * r["candidates"]:
             flag = "  <-- fewer than 20% of cycles survived"
-        lines.append(f"  {bid}{tag}: {r['kept']}/{r['candidates']} cycles kept, dropped: {dropped} "
-                     f"(capacity floor {r['capacity_floor_ah']:.3f} Ah, best cycle "
-                     f"{r['max_capacity_ah']:.3f} Ah){flag}")
+        lines.append(
+            f"  {bid}{tag}: {r['kept']}/{r['candidates']} cycles kept, dropped: {dropped} "
+            f"(capacity floor {r['capacity_floor_ah']:.3f} Ah, best cycle "
+            f"{r['max_capacity_ah']:.3f} Ah){flag}"
+        )
 
     if missing:
         lines.append(f"WARNING: {len(missing)} designated batteries are absent from the raw metadata: {missing}")
@@ -460,8 +487,7 @@ def format_summary(summary):
     return "\n".join(lines)
 
 
-def run_pipeline(raw_dir, out_dir, log=print, min_capacity_fraction=config.UNSET,
-                 allow_missing_held_out=False):
+def run_pipeline(raw_dir, out_dir, log=print, min_capacity_fraction=config.UNSET, allow_missing_held_out=False):
     """Raw NASA folder -> processed train / held-out CSVs. Returns the processing summary.
 
     ``raw_dir`` is either the per-cycle CSV layout (``metadata.csv`` + ``data/``) or a folder
@@ -485,8 +511,7 @@ def run_pipeline(raw_dir, out_dir, log=print, min_capacity_fraction=config.UNSET
     silver_discharge = build_silver_discharge(bronze)
     silver_impedance = build_silver_impedance(bronze)
     gold = build_gold(silver_discharge, silver_impedance)
-    log(f"{config.GOLD_TABLE}: {len(gold)} discharge cycles across "
-        f"{gold['battery_id'].nunique()} batteries")
+    log(f"{config.GOLD_TABLE}: {len(gold)} discharge cycles across {gold['battery_id'].nunique()} batteries")
 
     dataset, summary = build_feature_table(gold, raw_dir, min_capacity_fraction=min_capacity_fraction)
     log(format_summary(summary))
@@ -494,8 +519,10 @@ def run_pipeline(raw_dir, out_dir, log=print, min_capacity_fraction=config.UNSET
         raise RuntimeError("No cycles survived processing -- check the skip-reason counts above.")
     problems = coverage_problems(summary)
     if problems and allow_missing_held_out:
-        log("WARNING: --allow-missing-held-out set; writing tables although held-out batteries lack data:\n  "
-            + "\n  ".join(problems))
+        log(
+            "WARNING: --allow-missing-held-out set; writing tables although held-out batteries lack data:\n  "
+            + "\n  ".join(problems)
+        )
     elif problems:
         raise BatteryCoverageError(
             "Held-out batteries without validation data -- nothing was written:\n  "
@@ -517,9 +544,13 @@ def run_pipeline(raw_dir, out_dir, log=print, min_capacity_fraction=config.UNSET
     for table, frame in outputs.items():
         frame.to_csv(config.table_path(out_dir, table), index=False)
 
-    log(f"'{config.TRAIN_TABLE}' created: {train['battery_id'].nunique()} batteries, "
-        f"{len(train)} rows -> {config.table_path(out_dir, config.TRAIN_TABLE)}")
-    log(f"'{config.HELD_OUT_TABLE}' created: {held_out['battery_id'].nunique()} batteries, "
-        f"{len(held_out)} rows -> {config.table_path(out_dir, config.HELD_OUT_TABLE)}")
+    log(
+        f"'{config.TRAIN_TABLE}' created: {train['battery_id'].nunique()} batteries, "
+        f"{len(train)} rows -> {config.table_path(out_dir, config.TRAIN_TABLE)}"
+    )
+    log(
+        f"'{config.HELD_OUT_TABLE}' created: {held_out['battery_id'].nunique()} batteries, "
+        f"{len(held_out)} rows -> {config.table_path(out_dir, config.HELD_OUT_TABLE)}"
+    )
     summary["outputs"] = {t: config.table_path(out_dir, t) for t in outputs}
     return summary
