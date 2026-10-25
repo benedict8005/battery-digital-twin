@@ -81,7 +81,7 @@ def test_config_imports_only_the_standard_library():
     tree = ast.parse(inspect.getsource(config))
     modules = {n.names[0].name for n in ast.walk(tree) if isinstance(n, ast.Import)}
     modules |= {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}
-    assert modules <= {"os", "glob"}  # standard library only
+    assert modules <= {"os", "glob", "typing", "__future__"}  # standard library only
 
 
 def test_capacity_floor_is_min_of_nominal_and_relative():

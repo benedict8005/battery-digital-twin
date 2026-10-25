@@ -1,10 +1,14 @@
 """Open-circuit-voltage curve: polynomial fit and torch evaluation."""
 
+from __future__ import annotations
+
+from typing import Any
+
 import numpy as np
 import torch
 
 
-def fit_ocv_coeffs(df_agg, degree=4):
+def fit_ocv_coeffs(df_agg: Any, degree: int = 4) -> np.ndarray:
     """Fit OCV(SoC) with a polynomial against the representative discharge curve.
 
     SoC is normalised to [0, 1]; coefficients are returned highest power first.
@@ -13,7 +17,7 @@ def fit_ocv_coeffs(df_agg, degree=4):
     return np.polyfit(soc, df_agg["Voltage_measured"].values, deg=degree)
 
 
-def ocv_from_soc_torch(soc_tensor, coeffs):
+def ocv_from_soc_torch(soc_tensor: torch.Tensor, coeffs: Any) -> torch.Tensor:
     """Evaluate the fitted OCV polynomial on a tensor of SoC fractions in [0, 1]."""
     soc = torch.clamp(soc_tensor, 1e-3, 1 - 1e-3)
     ocv = torch.zeros_like(soc)

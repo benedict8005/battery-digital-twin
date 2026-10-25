@@ -9,7 +9,10 @@ This module deliberately imports nothing but the standard library: it must stay 
 without PyTorch, DeepXDE, Spark or MLflow.
 """
 
+from __future__ import annotations
+
 import os
+from typing import Any
 
 # ----------------------------------------------------------------------------------------
 # Physics
@@ -256,10 +259,14 @@ DEFAULT_TRAIN_CSV = os.path.join(DEFAULT_PROCESSED_DIR, TRAIN_FILE)
 DEFAULT_HELD_OUT_CSV = os.path.join(DEFAULT_PROCESSED_DIR, HELD_OUT_FILE)
 
 
-UNSET = object()  # "use the module constant" sentinel for keyword overrides
+UNSET: Any = object()  # "use the module constant" sentinel for keyword overrides
 
 
-def capacity_floor(max_capacity_ah, min_capacity_ah=UNSET, fraction_of_max=UNSET):
+def capacity_floor(
+    max_capacity_ah: float | None,
+    min_capacity_ah: Any = UNSET,
+    fraction_of_max: Any = UNSET,
+) -> float:
     """Capacity (Ah) at or below which a discharge cycle is skipped.
 
     ``min(MIN_VALID_CAPACITY_AH, MIN_CAPACITY_FRACTION_OF_MAX * max_capacity_ah)``: a cycle
@@ -277,23 +284,23 @@ def capacity_floor(max_capacity_ah, min_capacity_ah=UNSET, fraction_of_max=UNSET
     return float(min(min_capacity_ah, fraction_of_max * float(max_capacity_ah)))
 
 
-def metadata_path(raw_dir):
+def metadata_path(raw_dir: str) -> str:
     """Path of the raw metadata file inside a raw dataset folder."""
     return os.path.join(raw_dir, METADATA_FILENAME)
 
 
-def cycle_file_path(raw_dir, filename):
+def cycle_file_path(raw_dir: str, filename: str) -> str:
     """Path of one raw per-cycle CSV inside a raw dataset folder."""
     return os.path.join(raw_dir, CYCLE_DATA_SUBDIR, filename)
 
 
-def table_path(out_dir, table):
+def table_path(out_dir: str, table: str) -> str:
     """Local CSV path standing in for a named table (``train.csv`` / ``held_out.csv`` for the
     two model tables, ``<table>.csv`` otherwise)."""
     return os.path.join(out_dir, TABLE_FILES.get(table, f"{table}.csv"))
 
 
-def find_table(data_dir, table):
+def find_table(data_dir: str, table: str) -> str:
     """``table_path`` if it exists, else the pre-rename ``<table>.csv`` if that exists, else
     the new path (so callers get a clear FileNotFoundError)."""
     new = table_path(data_dir, table)
@@ -303,7 +310,7 @@ def find_table(data_dir, table):
     return new
 
 
-def is_mat_folder(path):
+def is_mat_folder(path: str) -> bool:
     """True if ``path`` holds NASA ``B*.mat`` files and no ``metadata.csv``."""
     import glob
 

@@ -49,3 +49,14 @@ python_version = "3.10"
 files = ["src"]
 ignore_missing_imports = true
 warn_unused_ignores = true
+
+# Modules already clean under --strict; extend this list as each module is typed.
+[[tool.mypy.overrides]]
+module = ["battery_pinn.config", "battery_pinn.ocv"]
+disallow_untyped_defs = true
+disallow_untyped_calls = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_any_generics = false
+warn_return_any = true
+no_implicit_reexport = true
