@@ -8,12 +8,14 @@ creates lands there too. ``auto`` therefore means CUDA when it works and CPU oth
 is never selected automatically because DeepXDE's L-BFGS path is not reliable on it.
 """
 
+from collections.abc import Callable
+
 import torch
 
 DEVICE_CHOICES = ("auto", "cpu", "cuda")
 
 
-def probe(device):
+def probe(device: str | torch.device) -> str | None:
     """Run one tiny tensor op on ``device``; returns the error message, or None if it works."""
     try:
         (torch.zeros(1, device=device) + 1).item()
@@ -22,7 +24,7 @@ def probe(device):
         return f"{type(exc).__name__}: {exc}"
 
 
-def resolve_device(requested="auto", log=print):
+def resolve_device(requested: str | None = "auto", log: Callable[[str], object] | None = print) -> torch.device:
     """Map a ``--device`` choice to a usable :class:`torch.device`.
 
     * ``cpu``  -> CPU.
@@ -50,18 +52,19 @@ def resolve_device(requested="auto", log=print):
     return cuda
 
 
-def activate(device):
+def activate(device: str | torch.device) -> torch.device:
     """Make ``device`` PyTorch's default tensor device (so DeepXDE builds the model on it)."""
     device = torch.device(device)
     torch.set_default_device(device)
     return device
 
 
-def describe(device):
+def describe(device: str | torch.device) -> str:
+    """Short human-readable name of ``device`` (includes the GPU model for CUDA)."""
     device = torch.device(device)
     if device.type == "cuda":
         try:
             return f"cuda ({torch.cuda.get_device_name(device)})"
         except Exception:  # noqa: BLE001
             return "cuda"
-    return device.type
+    return str(device.type)
