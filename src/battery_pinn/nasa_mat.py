@@ -17,8 +17,11 @@ with that cycle's measurements -- so this module produces exactly that:
 
 import glob
 import os
+from collections.abc import Callable, Iterator, Sequence
+from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
 from battery_pinn import config
@@ -39,11 +42,11 @@ METADATA_COLUMNS = [
 SCALAR_FIELDS = ("Capacity", "Re", "Rct")
 
 
-def _scalar(value):
+def _scalar(value: Any) -> float | str:
     """A struct field holding one number (possibly complex), or NaN when it is empty."""
     arr = np.asarray(value).ravel()
     if arr.size == 0:
-        return np.nan
+        return float("nan")
     v = arr[0]
     if np.iscomplexobj(v):
         # A genuinely complex fit is kept as text so the column stays numeric for the rest.
@@ -51,7 +54,9 @@ def _scalar(value):
     return float(v)
 
 
-def read_cycles(mat_path):
+def read_cycles(
+    mat_path: str,
+) -> Iterator[tuple[str, float, npt.NDArray[np.float64], dict[str, Any]]]:
     """Yield ``(type, ambient_temperature, time_vector, data)`` for every cycle in a .mat file.
 
     ``data`` maps each measurement field to a 1-D array and each scalar field to a number.
@@ -66,7 +71,7 @@ def read_cycles(mat_path):
     for i in range(cycles.shape[1]):
         cycle = cycles[0, i]
         struct = cycle["data"][0, 0]
-        data = {}
+        data: dict[str, Any] = {}
         for name in struct.dtype.names:
             field = struct[name]
             data[name] = _scalar(field) if name in SCALAR_FIELDS else np.asarray(field).ravel()
@@ -78,12 +83,13 @@ def read_cycles(mat_path):
         )
 
 
-def _measurements_frame(data):
+def _measurements_frame(data: dict[str, Any]) -> pd.DataFrame:
+    """Measurement fields of one cycle as columns, NaN-padded to the longest vector."""
     vectors = {k: v for k, v in data.items() if k not in SCALAR_FIELDS}
     if not vectors:
         return pd.DataFrame()
     n = max(len(v) for v in vectors.values())
-    padded = {}
+    padded: dict[str, Any] = {}
     for name, values in vectors.items():
         if len(values) < n:  # impedance spectra have fields of different lengths
             values = np.concatenate(
@@ -93,7 +99,12 @@ def _measurements_frame(data):
     return pd.DataFrame(padded)
 
 
-def convert_mat_dir(mat_dir, out_dir, battery_ids=None, log=print):
+def convert_mat_dir(
+    mat_dir: str,
+    out_dir: str,
+    battery_ids: Sequence[str] | None = None,
+    log: Callable[[str], object] = print,
+) -> pd.DataFrame:
     """Write ``metadata.csv`` and ``data/*.csv`` for every ``B*.mat`` in ``mat_dir``.
 
     Returns the metadata frame. ``battery_ids`` restricts the conversion to those batteries.
@@ -106,7 +117,8 @@ def convert_mat_dir(mat_dir, out_dir, battery_ids=None, log=print):
 
     data_dir = os.path.join(out_dir, config.CYCLE_DATA_SUBDIR)
     os.makedirs(data_dir, exist_ok=True)
-    records, uid = [], 0
+    records: list[dict[str, Any]] = []
+    uid = 0
     for path in paths:
         battery_id = os.path.splitext(os.path.basename(path))[0]
         n_before = len(records)
