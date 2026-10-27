@@ -18,7 +18,7 @@ with that cycle's measurements -- so this module produces exactly that:
 import glob
 import os
 from collections.abc import Callable, Iterator, Sequence
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -87,7 +87,7 @@ def _measurements_frame(data: dict[str, Any]) -> pd.DataFrame:
     """Measurement fields of one cycle as columns, NaN-padded to the longest vector."""
     vectors = {k: v for k, v in data.items() if k not in SCALAR_FIELDS}
     if not vectors:
-        return pd.DataFrame()
+        return cast("pd.DataFrame", pd.DataFrame())
     n = max(len(v) for v in vectors.values())
     padded: dict[str, Any] = {}
     for name, values in vectors.items():
@@ -96,7 +96,7 @@ def _measurements_frame(data: dict[str, Any]) -> pd.DataFrame:
                 [values, np.full(n - len(values), np.nan, dtype=values.dtype if values.dtype.kind == "c" else float)]
             )
         padded[name] = values
-    return pd.DataFrame(padded)
+    return cast("pd.DataFrame", pd.DataFrame(padded))
 
 
 def convert_mat_dir(
@@ -144,4 +144,4 @@ def convert_mat_dir(
     meta = pd.DataFrame(records, columns=METADATA_COLUMNS)
     meta.to_csv(config.metadata_path(out_dir), index=False)
     log(f"Wrote {len(meta)} metadata rows for {len(paths)} batteries to {config.metadata_path(out_dir)}")
-    return meta
+    return cast("pd.DataFrame", meta)

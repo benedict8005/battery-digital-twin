@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Sequence
 from os import PathLike
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -22,8 +22,8 @@ class BatteryCoverageError(RuntimeError):
 def _cycles(df: pd.DataFrame) -> pd.Series:
     """Number of distinct cycles per battery (rows per battery when there is no cycle column)."""
     if "cycle_number" in df.columns:
-        return df.drop_duplicates(["battery_id", "cycle_number"])["battery_id"].value_counts()
-    return df["battery_id"].value_counts()
+        return cast("pd.Series", df.drop_duplicates(["battery_id", "cycle_number"])["battery_id"].value_counts())
+    return cast("pd.Series", df["battery_id"].value_counts())
 
 
 def battery_report(
@@ -135,17 +135,23 @@ def load_dataset(
 
     if df.empty:
         raise ValueError(f"{path} has no usable rows after cleaning.")
-    return df.reset_index(drop=True)
+    return cast("pd.DataFrame", df.reset_index(drop=True))
 
 
 def representative_profile(df: pd.DataFrame) -> pd.DataFrame:
     """Average current / voltage / SoC against normalised time across all cycles."""
-    return (
+    profile = (
         df.sort_values("Time_normalized")
         .groupby("Time_normalized")
         .agg({"Current_measured": "mean", "Voltage_measured": "mean", "SoC": "mean"})
         .reset_index()
     )
+    return cast("pd.DataFrame", profile)
+
+
+def _column(df: pd.DataFrame, name: str) -> npt.NDArray[np.float64]:
+    """One column as a plain float64 array."""
+    return np.asarray(df[name].to_numpy(), dtype=np.float64)
 
 
 def build_points_and_targets(
@@ -157,11 +163,11 @@ def build_points_and_targets(
     points = np.column_stack(
         (
             np.ones(len(df)),
-            df["SoH"].values / 100.0,
-            df["Re"].values * 10.0,
-            df["ambient_temperature"].values,
-            df["Time_normalized"].values,
+            _column(df, "SoH") / 100.0,
+            _column(df, "Re") * 10.0,
+            _column(df, "ambient_temperature"),
+            _column(df, "Time_normalized"),
         )
     ).astype(np.float32)
-    targets = (df["Temperature_measured"].values - df["ambient_temperature"].values) / TEMP_SCALE_C
+    targets = (_column(df, "Temperature_measured") - _column(df, "ambient_temperature")) / TEMP_SCALE_C
     return points, targets.astype(np.float32)
