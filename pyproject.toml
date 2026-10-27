@@ -52,7 +52,7 @@ warn_unused_ignores = true
 
 # Modules already clean under --strict; extend this list as each module is typed.
 [[tool.mypy.overrides]]
-module = ["battery_pinn.config", "battery_pinn.ocv", "battery_pinn.interpolation", "battery_pinn.device"]
+module = ["battery_pinn.config", "battery_pinn.ocv", "battery_pinn.interpolation", "battery_pinn.device", "battery_pinn.data"]
 disallow_untyped_defs = true
 disallow_untyped_calls = true
 disallow_incomplete_defs = true
