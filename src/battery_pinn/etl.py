@@ -33,6 +33,8 @@ Two deliberate deviations, both documented in ``docs/CHANGELOG.md`` item 21:
 import os
 import re
 from collections import Counter
+from collections.abc import Callable, Collection, Mapping
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -44,7 +46,7 @@ _NUMBER_RE = re.compile(r"\d+\.?\d*(?:[eE][+-]?\d+)?")
 _TIME_COMPONENTS = ["y", "m", "d", "hr", "mi", "sec"]
 
 # Aggregations applied to each downsampling bin (same columns and order as the original).
-_BIN_AGGREGATIONS = {
+_BIN_AGGREGATIONS: dict[str, str] = {
     "Time": "mean",
     "Voltage_measured": "mean",
     "Current_measured": "mean",
@@ -56,7 +58,7 @@ _BIN_AGGREGATIONS = {
 # ----------------------------------------------------------------------------------------
 # Bronze
 # ----------------------------------------------------------------------------------------
-def load_raw_metadata(raw_dir):
+def load_raw_metadata(raw_dir: str) -> pd.DataFrame:
     """Read ``metadata.csv`` and normalise its column names.
 
     The Spark SQL matched columns case-insensitively (``Capacity`` in the file became
@@ -71,10 +73,11 @@ def load_raw_metadata(raw_dir):
         )
     df = pd.read_csv(path)
 
-    by_lower = {}
+    by_lower: dict[str, list[str]] = {}
     for col in df.columns:
         by_lower.setdefault(col.lower(), []).append(col)
-    rename, missing = {}, []
+    rename: dict[str, str] = {}
+    missing: list[str] = []
     for canonical in config.RAW_METADATA_COLUMNS:
         matches = by_lower.get(canonical.lower(), [])
         if len(matches) > 1:
@@ -97,7 +100,7 @@ def load_raw_metadata(raw_dir):
 # ----------------------------------------------------------------------------------------
 # Silver
 # ----------------------------------------------------------------------------------------
-def _seconds_to_whole_and_micros(sec):
+def _seconds_to_whole_and_micros(sec: float) -> tuple[int, int]:
     """Split a seconds value the way ``to_timestamp`` parsed the concatenated string.
 
     Spark cast the seconds to DOUBLE, rendered it back to text and parsed the fraction as
@@ -112,7 +115,7 @@ def _seconds_to_whole_and_micros(sec):
     return int(whole), int((frac + "000000")[:6])
 
 
-def _timestamp(y, m, d, hr, mi, sec):
+def _timestamp(y: float, m: float, d: float, hr: float, mi: float, sec: float) -> pd.Timestamp:
     """``to_timestamp(concat(y,'-',m,'-',d,' ',hr,':',mi,':',sec))``; NaT where Spark gave NULL."""
     if any(pd.isna(v) for v in (y, m, d, hr, mi, sec)):
         return pd.NaT
@@ -131,7 +134,7 @@ def _timestamp(y, m, d, hr, mi, sec):
         return pd.NaT
 
 
-def parse_start_time(start_time):
+def parse_start_time(start_time: pd.Series) -> pd.DataFrame:
     """Parse the numpy-array-style ``start_time`` strings (e.g. ``[2008. 4. 2. 15. 25. 41.]``).
 
     Returns a DataFrame aligned with ``start_time`` holding ``n_parts`` (number of numeric
@@ -158,7 +161,7 @@ def parse_start_time(start_time):
     return out
 
 
-def _assign_cycle_numbers(df):
+def _assign_cycle_numbers(df: pd.DataFrame) -> pd.DataFrame:
     """``ROW_NUMBER() OVER (PARTITION BY battery_id ORDER BY y, m, d, hr, mi, sec)``.
 
     NULL components sort first (Spark's ASC default); exact ties keep file order.
@@ -168,12 +171,12 @@ def _assign_cycle_numbers(df):
     return df.assign(cycle_number=cycle_number.reindex(df.index).astype(int))
 
 
-def _silver_base(bronze, excluded_batteries):
+def _silver_base(bronze: pd.DataFrame, excluded_batteries: Collection[str]) -> pd.DataFrame:
     df = bronze[~bronze["battery_id"].isin(excluded_batteries)]
     return df.join(parse_start_time(df["start_time"]))
 
 
-def build_silver_discharge(bronze, excluded_batteries=None):
+def build_silver_discharge(bronze: pd.DataFrame, excluded_batteries: Collection[str] | None = None) -> pd.DataFrame:
     """Discharge rows with ``start_datetime`` and a per-battery ``cycle_number``."""
     if excluded_batteries is None:
         excluded_batteries = config.EXCLUDED_BATTERIES
@@ -184,7 +187,7 @@ def build_silver_discharge(bronze, excluded_batteries=None):
     return df[cols].reset_index(drop=True)
 
 
-def build_silver_impedance(bronze, excluded_batteries=None):
+def build_silver_impedance(bronze: pd.DataFrame, excluded_batteries: Collection[str] | None = None) -> pd.DataFrame:
     """Impedance rows (``Re``, ``Rct``) with ``start_datetime`` and a per-battery ``cycle_number``.
 
     Unlike the discharge layer, rows whose ``start_time`` has fewer than six numeric parts
@@ -202,7 +205,7 @@ def build_silver_impedance(bronze, excluded_batteries=None):
 # ----------------------------------------------------------------------------------------
 # Gold
 # ----------------------------------------------------------------------------------------
-def _latest_impedance_at_or_before(discharge, impedance):
+def _latest_impedance_at_or_before(discharge: pd.DataFrame, impedance: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     """For each discharge row, the impedance row with the greatest ``start_datetime`` that is
     ``<=`` the discharge start (same battery). Rows with NaT never match, as in SQL."""
     re_out = np.full(len(discharge), np.nan)
@@ -222,7 +225,7 @@ def _latest_impedance_at_or_before(discharge, impedance):
     return re_out, rct_out
 
 
-def build_gold(silver_discharge, silver_impedance):
+def build_gold(silver_discharge: pd.DataFrame, silver_impedance: pd.DataFrame) -> pd.DataFrame:
     """One row per discharge file with the impedance (``Re``, ``Rct``) in force at that time.
 
     ``capacity``, ``Re`` and ``Rct`` are rounded to float32 because the gold table declared
@@ -253,7 +256,7 @@ def build_gold(silver_discharge, silver_impedance):
 # ----------------------------------------------------------------------------------------
 # Feature engineering
 # ----------------------------------------------------------------------------------------
-def load_cycle_file(path):
+def load_cycle_file(path: str) -> pd.DataFrame:
     """Read one raw per-cycle CSV, checking it has the columns the pipeline uses."""
     df = pd.read_csv(path)
     missing = [c for c in config.RAW_CYCLE_COLUMNS if c not in df.columns]
@@ -262,13 +265,13 @@ def load_cycle_file(path):
     return df.reset_index(drop=True)
 
 
-def truncate_at_cutoff(cycle, cutoff_voltage):
+def truncate_at_cutoff(cycle: pd.DataFrame, cutoff_voltage: float) -> pd.DataFrame:
     """Keep the samples before the first one whose measured voltage is below the cutoff."""
     cutoff_idx = cycle[cycle["Voltage_measured"] < cutoff_voltage].index.min()
     return cycle if pd.isna(cutoff_idx) else cycle.iloc[:cutoff_idx].copy()
 
 
-def add_state_of_charge(cycle, capacity_ah):
+def add_state_of_charge(cycle: pd.DataFrame, capacity_ah: float) -> pd.DataFrame:
     """Coulomb-counting SoC (%) from the measured current; starts at 100 %."""
     cycle["Time_diff_hr"] = cycle["Time"].diff().fillna(0) / 3600
     cycle["Delta_Q"] = abs(cycle["Current_measured"] * cycle["Time_diff_hr"])
@@ -277,7 +280,7 @@ def add_state_of_charge(cycle, capacity_ah):
     return cycle
 
 
-def downsample_cycle(cycle, num_bins=None):
+def downsample_cycle(cycle: pd.DataFrame, num_bins: int | None = None) -> pd.DataFrame:
     """Average each measured column over ``num_bins`` equal-width slices of the row index."""
     if num_bins is None:
         num_bins = config.BINS_PER_CYCLE
@@ -285,7 +288,15 @@ def downsample_cycle(cycle, num_bins=None):
     return cycle.groupby("bin").agg(_BIN_AGGREGATIONS).reset_index()
 
 
-def process_cycle(cycle, meta, max_capacity, cutoff_voltage, min_samples=None, capacity_floor_ah=None, num_bins=None):
+def process_cycle(
+    cycle: pd.DataFrame,
+    meta: Mapping[str, Any],
+    max_capacity: float,
+    cutoff_voltage: float,
+    min_samples: int | None = None,
+    capacity_floor_ah: float | None = None,
+    num_bins: int | None = None,
+) -> tuple[pd.DataFrame | None, str | None]:
     """Turn one raw discharge cycle into its downsampled, labelled rows.
 
     ``meta`` is the cycle's gold-table row (``battery_id``, ``cycle_number``, ``capacity``,
@@ -324,16 +335,16 @@ SKIP_REASONS = ("file_not_found", "too_short", "low_capacity")
 
 
 def build_feature_table(
-    gold,
-    raw_dir,
-    target_batteries=None,
-    held_out_batteries=None,
-    cutoff_map=None,
-    default_cutoff=None,
-    min_capacity=config.UNSET,
-    min_capacity_fraction=config.UNSET,
-    **cycle_kwargs,
-):
+    gold: pd.DataFrame,
+    raw_dir: str,
+    target_batteries: Collection[str] | None = None,
+    held_out_batteries: Collection[str] | None = None,
+    cutoff_map: Mapping[str, float] | None = None,
+    default_cutoff: float | None = None,
+    min_capacity: Any = config.UNSET,
+    min_capacity_fraction: Any = config.UNSET,
+    **cycle_kwargs: Any,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
     """Run the per-cycle feature engineering over every gold row of the target batteries.
 
     Returns ``(dataset, summary)``. ``dataset`` is the concatenation of all kept cycles (an
@@ -359,12 +370,15 @@ def build_feature_table(
         for bid in target_batteries
     }
 
-    processed, skip_counts = [], dict.fromkeys(SKIP_REASONS, 0)
-    kept = Counter()
+    processed: list[pd.DataFrame] = []
+    skip_counts = dict.fromkeys(SKIP_REASONS, 0)
+    kept: Counter[str] = Counter()
     dropped = {bid: dict.fromkeys(SKIP_REASONS, 0) for bid in target_batteries}
     for _, row in discharge_metadata.iterrows():
         bid = row["battery_id"]
         path = config.cycle_file_path(raw_dir, row["filename"])
+        reason: str | None
+        frame: pd.DataFrame | None
         if not os.path.exists(path):
             reason, frame = "file_not_found", None
         else:
@@ -377,6 +391,7 @@ def build_feature_table(
                 **cycle_kwargs,
             )
         if frame is None:
+            assert reason is not None
             skip_counts[reason] += 1
             dropped[bid][reason] += 1
         else:
@@ -409,9 +424,9 @@ def build_feature_table(
     return dataset, summary
 
 
-def coverage_problems(summary):
+def coverage_problems(summary: Mapping[str, Any]) -> list[str]:
     """Why a held-out battery is unusable: absent from the metadata or zero surviving cycles."""
-    problems = []
+    problems: list[str] = []
     for bid, r in summary["per_battery"].items():
         if r["role"] != "held-out":
             continue
@@ -427,7 +442,9 @@ def coverage_problems(summary):
     return problems
 
 
-def split_train_held_out(dataset, held_out_batteries=None):
+def split_train_held_out(
+    dataset: pd.DataFrame, held_out_batteries: Collection[str] | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Battery-level split: a held-out battery never contributes rows to the training set."""
     if held_out_batteries is None:
         held_out_batteries = config.HELD_OUT_BATTERIES
@@ -438,7 +455,7 @@ def split_train_held_out(dataset, held_out_batteries=None):
 # ----------------------------------------------------------------------------------------
 # Reporting and the end-to-end driver
 # ----------------------------------------------------------------------------------------
-def format_summary(summary):
+def format_summary(summary: Mapping[str, Any]) -> str:
     """The cycle-processing summary and the per-battery survival report for every designated battery."""
     total, kept, skips = summary["total_candidates"], summary["total_kept"], summary["skip_counts"]
     lines = [
@@ -456,7 +473,8 @@ def format_summary(summary):
         )
 
     lines.append("--- Per-battery cycle survival (every designated battery) ---")
-    missing, zero_kept = [], []
+    missing: list[str] = []
+    zero_kept: list[str] = []
     for bid, r in summary["per_battery"].items():
         tag = " [HELD-OUT]" if r["role"] == "held-out" else ""
         if not r["present"]:
@@ -487,7 +505,13 @@ def format_summary(summary):
     return "\n".join(lines)
 
 
-def run_pipeline(raw_dir, out_dir, log=print, min_capacity_fraction=config.UNSET, allow_missing_held_out=False):
+def run_pipeline(
+    raw_dir: str,
+    out_dir: str,
+    log: Callable[[str], None] = print,
+    min_capacity_fraction: Any = config.UNSET,
+    allow_missing_held_out: bool = False,
+) -> dict[str, Any]:
     """Raw NASA folder -> processed train / held-out CSVs. Returns the processing summary.
 
     ``raw_dir`` is either the per-cycle CSV layout (``metadata.csv`` + ``data/``) or a folder
