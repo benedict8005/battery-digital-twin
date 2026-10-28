@@ -34,10 +34,13 @@ import os
 import re
 from collections import Counter
 from collections.abc import Callable, Collection, Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:  # the stubs define it; pandas does not export it at runtime
+    from pandas._libs.tslibs.nattype import NaTType
 
 from battery_pinn import config
 from battery_pinn.data import BatteryCoverageError
@@ -94,7 +97,7 @@ def load_raw_metadata(raw_dir: str) -> pd.DataFrame:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     for col in ("battery_id", "type", "filename"):
         df[col] = df[col].map(lambda v: v.strip() if isinstance(v, str) else v)
-    return df
+    return cast("pd.DataFrame", df)
 
 
 # ----------------------------------------------------------------------------------------
@@ -115,13 +118,13 @@ def _seconds_to_whole_and_micros(sec: float) -> tuple[int, int]:
     return int(whole), int((frac + "000000")[:6])
 
 
-def _timestamp(y: float, m: float, d: float, hr: float, mi: float, sec: float) -> pd.Timestamp:
+def _timestamp(y: float, m: float, d: float, hr: float, mi: float, sec: float) -> "pd.Timestamp | NaTType":
     """``to_timestamp(concat(y,'-',m,'-',d,' ',hr,':',mi,':',sec))``; NaT where Spark gave NULL."""
     if any(pd.isna(v) for v in (y, m, d, hr, mi, sec)):
         return pd.NaT
     try:
         whole, micros = _seconds_to_whole_and_micros(sec)
-        return pd.Timestamp(
+        stamp: pd.Timestamp = pd.Timestamp(
             year=int(y),
             month=int(m),
             day=int(d),
@@ -130,6 +133,7 @@ def _timestamp(y: float, m: float, d: float, hr: float, mi: float, sec: float) -
             second=whole,
             microsecond=micros,
         )
+        return stamp
     except (ValueError, OverflowError):
         return pd.NaT
 
@@ -158,7 +162,7 @@ def parse_start_time(start_time: pd.Series) -> pd.DataFrame:
         index=start_time.index,
         dtype="datetime64[ns]",
     )
-    return out
+    return cast("pd.DataFrame", out)
 
 
 def _assign_cycle_numbers(df: pd.DataFrame) -> pd.DataFrame:
@@ -168,12 +172,12 @@ def _assign_cycle_numbers(df: pd.DataFrame) -> pd.DataFrame:
     """
     ordered = df.sort_values(["battery_id"] + _TIME_COMPONENTS, kind="mergesort", na_position="first")
     cycle_number = ordered.groupby("battery_id", sort=False).cumcount() + 1
-    return df.assign(cycle_number=cycle_number.reindex(df.index).astype(int))
+    return cast("pd.DataFrame", df.assign(cycle_number=cycle_number.reindex(df.index).astype(int)))
 
 
 def _silver_base(bronze: pd.DataFrame, excluded_batteries: Collection[str]) -> pd.DataFrame:
     df = bronze[~bronze["battery_id"].isin(excluded_batteries)]
-    return df.join(parse_start_time(df["start_time"]))
+    return cast("pd.DataFrame", df.join(parse_start_time(df["start_time"])))
 
 
 def build_silver_discharge(bronze: pd.DataFrame, excluded_batteries: Collection[str] | None = None) -> pd.DataFrame:
@@ -184,7 +188,7 @@ def build_silver_discharge(bronze: pd.DataFrame, excluded_batteries: Collection[
     df = df[df["type"] == "discharge"]
     df = _assign_cycle_numbers(df)
     cols = ["battery_id", "type", "filename", "ambient_temperature", "capacity", "start_datetime", "cycle_number"]
-    return df[cols].reset_index(drop=True)
+    return cast("pd.DataFrame", df[cols].reset_index(drop=True))
 
 
 def build_silver_impedance(bronze: pd.DataFrame, excluded_batteries: Collection[str] | None = None) -> pd.DataFrame:
@@ -199,7 +203,7 @@ def build_silver_impedance(bronze: pd.DataFrame, excluded_batteries: Collection[
     df = df[(df["n_parts"] >= 6) & (df["type"] == "impedance")]
     df = _assign_cycle_numbers(df)
     cols = ["battery_id", "Re", "Rct", "start_datetime", "cycle_number"]
-    return df[cols].reset_index(drop=True)
+    return cast("pd.DataFrame", df[cols].reset_index(drop=True))
 
 
 # ----------------------------------------------------------------------------------------
@@ -250,7 +254,7 @@ def build_gold(silver_discharge: pd.DataFrame, silver_impedance: pd.DataFrame) -
         "Re",
         "Rct",
     ]
-    return gold[cols].reset_index(drop=True)
+    return cast("pd.DataFrame", gold[cols].reset_index(drop=True))
 
 
 # ----------------------------------------------------------------------------------------
@@ -262,7 +266,7 @@ def load_cycle_file(path: str) -> pd.DataFrame:
     missing = [c for c in config.RAW_CYCLE_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"{path} is missing required columns: {missing}")
-    return df.reset_index(drop=True)
+    return cast("pd.DataFrame", df.reset_index(drop=True))
 
 
 def truncate_at_cutoff(cycle: pd.DataFrame, cutoff_voltage: float) -> pd.DataFrame:
@@ -285,7 +289,7 @@ def downsample_cycle(cycle: pd.DataFrame, num_bins: int | None = None) -> pd.Dat
     if num_bins is None:
         num_bins = config.BINS_PER_CYCLE
     cycle["bin"] = pd.cut(cycle.index, bins=num_bins, labels=False)
-    return cycle.groupby("bin").agg(_BIN_AGGREGATIONS).reset_index()
+    return cast("pd.DataFrame", cycle.groupby("bin").agg(_BIN_AGGREGATIONS).reset_index())
 
 
 def process_cycle(
