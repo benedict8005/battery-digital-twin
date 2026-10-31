@@ -1,4 +1,5 @@
 """Conversion of NASA's .mat files into the raw CSV layout the pipeline reads."""
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -29,8 +30,8 @@ def test_read_cycles_yields_type_ambient_time_and_fields(mat_dir):
 def test_scalar_handles_empty_and_complex_values():
     assert np.isnan(_scalar(np.zeros((1, 0))))
     assert _scalar(np.array([[1.5]])) == 1.5
-    assert _scalar(np.array([[0.05 + 0j]])) == 0.05                 # real-valued complex -> float
-    assert _scalar(np.array([[0.05 + 0.01j]])) == "(0.05+0.01j)"    # truly complex -> text (ETL -> NaN)
+    assert _scalar(np.array([[0.05 + 0j]])) == 0.05  # real-valued complex -> float
+    assert _scalar(np.array([[0.05 + 0.01j]])) == "(0.05+0.01j)"  # truly complex -> text (ETL -> NaN)
 
 
 def test_convert_writes_metadata_and_cycle_files(mat_dir, tmp_path):

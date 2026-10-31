@@ -1,4 +1,5 @@
 """A very short real training run: checkpoint plumbing and device handling end to end."""
+
 import json
 
 import numpy as np
@@ -19,8 +20,18 @@ def train_df():
 
 
 def test_train_one_seed_on_cpu_writes_a_loadable_checkpoint(train_df, tmp_path, capsys):
-    result = train_one_seed(train_df, seed=0, out_dir=str(tmp_path), iterations=5, lbfgs_iterations=0,
-                            num_domain=20, num_boundary=5, num_initial=20, num_test=10, device="cpu")
+    result = train_one_seed(
+        train_df,
+        seed=0,
+        out_dir=str(tmp_path),
+        iterations=5,
+        lbfgs_iterations=0,
+        num_domain=20,
+        num_boundary=5,
+        num_initial=20,
+        num_test=10,
+        device="cpu",
+    )
     assert result["device"] == "cpu"
     assert "Training on cpu" in capsys.readouterr().out
     checkpoint = load_checkpoint(result["checkpoint"])
@@ -30,8 +41,18 @@ def test_train_one_seed_on_cpu_writes_a_loadable_checkpoint(train_df, tmp_path, 
 
 def test_train_ensemble_passes_device_through_and_auto_falls_back(train_df, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
-    results = train_ensemble(train_df, [1], str(tmp_path), iterations=3, lbfgs_iterations=0,
-                             num_domain=20, num_boundary=5, num_initial=20, num_test=10, device="cuda")
+    results = train_ensemble(
+        train_df,
+        [1],
+        str(tmp_path),
+        iterations=3,
+        lbfgs_iterations=0,
+        num_domain=20,
+        num_boundary=5,
+        num_initial=20,
+        num_test=10,
+        device="cuda",
+    )
     out = capsys.readouterr().out
     assert "falling back to CPU" in out and results[0]["device"] == "cpu"
     summary = json.load(open(tmp_path / "train_summary.json"))
@@ -55,9 +76,21 @@ def test_anchor_subset_and_loss_logging(train_df, tmp_path, capsys):
 
     from battery_pinn import config
 
-    result = train_one_seed(train_df, seed=3, out_dir=str(tmp_path), iterations=6, lbfgs_iterations=2,
-                            num_domain=20, num_boundary=5, num_initial=20, num_test=10, display_every=2, device="cpu",
-                            anchor_subset=40, log_a_sei_init=21.0)
+    result = train_one_seed(
+        train_df,
+        seed=3,
+        out_dir=str(tmp_path),
+        iterations=6,
+        lbfgs_iterations=2,
+        num_domain=20,
+        num_boundary=5,
+        num_initial=20,
+        num_test=10,
+        display_every=2,
+        device="cpu",
+        anchor_subset=40,
+        log_a_sei_init=21.0,
+    )
     out = capsys.readouterr().out
     assert f"Observation points: {len(train_df)}; used as anchors / data fit: 40 (anchor subset, seed 3)" in out
     assert "Dominant term:" in out
@@ -69,14 +102,25 @@ def test_anchor_subset_and_loss_logging(train_df, tmp_path, capsys):
     history = pd.read_csv(tmp_path / "loss_history_seed3.csv")
     assert list(history.columns) == ["step", "log10_A_sei"] + config.LOSS_TERM_NAMES
     assert history["step"].is_monotonic_increasing and history["step"].is_unique
-    assert history["step"].iloc[0] <= 2 and history["step"].iloc[-1] >= 6   # Adam steps, then L-BFGS
+    assert history["step"].iloc[0] <= 2 and history["step"].iloc[-1] >= 6  # Adam steps, then L-BFGS
     assert np.isfinite(history[config.LOSS_TERM_NAMES].values).all()
     assert history["log10_A_sei"].iloc[0] == pytest.approx(21.0, abs=1e-3)
 
 
 def test_train_ensemble_spreads_a_sei_init_and_writes_identifiability(train_df, tmp_path, capsys):
-    results = train_ensemble(train_df, [0, 1, 2], str(tmp_path), iterations=2, lbfgs_iterations=0,
-                             num_domain=20, num_boundary=5, num_initial=20, num_test=10, device="cpu", a_sei_init_spread=1.0)
+    results = train_ensemble(
+        train_df,
+        [0, 1, 2],
+        str(tmp_path),
+        iterations=2,
+        lbfgs_iterations=0,
+        num_domain=20,
+        num_boundary=5,
+        num_initial=20,
+        num_test=10,
+        device="cpu",
+        a_sei_init_spread=1.0,
+    )
     inits = [r["log10_A_sei_init"] for r in results]
     assert inits[1] == pytest.approx(inits[0] + 1.0) and inits[2] == pytest.approx(inits[0] + 2.0)
     assessment = json.load(open(tmp_path / "identifiability.json"))
@@ -86,6 +130,17 @@ def test_train_ensemble_spreads_a_sei_init_and_writes_identifiability(train_df, 
     summary = json.load(open(tmp_path / "train_summary.json"))
     assert [s["log10_A_sei_init"] for s in summary] == pytest.approx(inits)
     # An explicit init pins every seed instead.
-    pinned = train_ensemble(train_df, [0, 1], str(tmp_path / "pinned"), iterations=2, lbfgs_iterations=0,
-                            num_domain=20, num_boundary=5, num_initial=20, num_test=10, device="cpu", log_a_sei_init=20.5)
+    pinned = train_ensemble(
+        train_df,
+        [0, 1],
+        str(tmp_path / "pinned"),
+        iterations=2,
+        lbfgs_iterations=0,
+        num_domain=20,
+        num_boundary=5,
+        num_initial=20,
+        num_test=10,
+        device="cpu",
+        log_a_sei_init=20.5,
+    )
     assert [r["log10_A_sei_init"] for r in pinned] == [20.5, 20.5]

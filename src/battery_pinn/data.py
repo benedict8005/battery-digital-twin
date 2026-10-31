@@ -1,23 +1,34 @@
 """Loading and cleaning of the processed per-cycle dataset, with per-battery coverage checks."""
+
+from collections.abc import Callable, Sequence
+from os import PathLike
+from typing import Any, cast
+
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
 from battery_pinn import config
 from battery_pinn.config import REQUIRED_COLUMNS
+
+BatteryReport = dict[str, dict[str, Any]]
+"""Per-battery coverage record, as returned by :func:`battery_report`."""
 
 
 class BatteryCoverageError(RuntimeError):
     """A designated battery is missing from a dataset or has no surviving cycles."""
 
 
-def _cycles(df):
+def _cycles(df: pd.DataFrame) -> pd.Series:
     """Number of distinct cycles per battery (rows per battery when there is no cycle column)."""
     if "cycle_number" in df.columns:
-        return df.drop_duplicates(["battery_id", "cycle_number"])["battery_id"].value_counts()
-    return df["battery_id"].value_counts()
+        return cast("pd.Series", df.drop_duplicates(["battery_id", "cycle_number"])["battery_id"].value_counts())
+    return cast("pd.Series", df["battery_id"].value_counts())
 
 
-def battery_report(raw, clean, expected_batteries=None):
+def battery_report(
+    raw: pd.DataFrame, clean: pd.DataFrame, expected_batteries: Sequence[str] | None = None
+) -> BatteryReport:
     """Per-battery cycles/rows before and after cleaning.
 
     ``expected_batteries`` (default: the batteries present in ``raw``) fixes which batteries
@@ -32,7 +43,7 @@ def battery_report(raw, clean, expected_batteries=None):
     order = list(expected_batteries) + sorted(b for b in present if b not in set(expected_batteries))
     raw_cycles, clean_cycles = _cycles(raw), _cycles(clean)
     raw_rows, clean_rows = raw["battery_id"].value_counts(), clean["battery_id"].value_counts()
-    report = {}
+    report: BatteryReport = {}
     for bid in order:
         in_file, kept = int(raw_cycles.get(bid, 0)), int(clean_cycles.get(bid, 0))
         report[bid] = {
@@ -47,9 +58,9 @@ def battery_report(raw, clean, expected_batteries=None):
     return report
 
 
-def coverage_problems(report):
+def coverage_problems(report: BatteryReport) -> list[str]:
     """Human-readable reasons why an expected battery is unusable (empty list when all is well)."""
-    problems = []
+    problems: list[str] = []
     for bid, r in report.items():
         if not r["expected"]:
             continue
@@ -63,7 +74,12 @@ def coverage_problems(report):
     return problems
 
 
-def format_battery_report(report, title="Per-battery coverage", held_out_batteries=None):
+def format_battery_report(
+    report: BatteryReport,
+    title: str = "Per-battery coverage",
+    held_out_batteries: Sequence[str] | None = None,
+) -> str:
+    """Render a :func:`battery_report` as indented text, flagging held-out and lost batteries."""
     if held_out_batteries is None:
         held_out_batteries = config.HELD_OUT_BATTERIES
     lines = [f"--- {title} ---"]
@@ -78,12 +94,19 @@ def format_battery_report(report, title="Per-battery coverage", held_out_batteri
         elif r["cycles_dropped"]:
             flag = f"  ({r['cycles_dropped']} cycles dropped: missing/non-finite values)"
         extra = "" if r["expected"] else "  (not a designated battery)"
-        lines.append(f"  {bid}{tag}: {r['cycles_kept']}/{r['cycles_in_file']} cycles kept, "
-                     f"{r['rows_kept']}/{r['rows_in_file']} rows{flag}{extra}")
+        lines.append(
+            f"  {bid}{tag}: {r['cycles_kept']}/{r['cycles_in_file']} cycles kept, "
+            f"{r['rows_kept']}/{r['rows_in_file']} rows{flag}{extra}"
+        )
     return "\n".join(lines)
 
 
-def load_dataset(path, expected_batteries=None, required=True, log=print):
+def load_dataset(
+    path: str | PathLike[str],
+    expected_batteries: Sequence[str] | None = None,
+    required: bool = True,
+    log: Callable[[str], object] | None = print,
+) -> pd.DataFrame:
     """Read a processed dataset CSV and drop rows with missing critical values.
 
     Prints how many cycles/rows of every battery survived the cleaning. With
@@ -112,29 +135,39 @@ def load_dataset(path, expected_batteries=None, required=True, log=print):
 
     if df.empty:
         raise ValueError(f"{path} has no usable rows after cleaning.")
-    return df.reset_index(drop=True)
+    return cast("pd.DataFrame", df.reset_index(drop=True))
 
 
-def representative_profile(df):
+def representative_profile(df: pd.DataFrame) -> pd.DataFrame:
     """Average current / voltage / SoC against normalised time across all cycles."""
-    return (
+    profile = (
         df.sort_values("Time_normalized")
         .groupby("Time_normalized")
         .agg({"Current_measured": "mean", "Voltage_measured": "mean", "SoC": "mean"})
         .reset_index()
     )
+    return cast("pd.DataFrame", profile)
 
 
-def build_points_and_targets(df):
+def _column(df: pd.DataFrame, name: str) -> npt.NDArray[np.float64]:
+    """One column as a plain float64 array."""
+    return np.asarray(df[name].to_numpy(), dtype=np.float64)
+
+
+def build_points_and_targets(
+    df: pd.DataFrame,
+) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Surface (x=1) network inputs and the scaled T_delta target for each row."""
     from battery_pinn.config import TEMP_SCALE_C
 
-    points = np.column_stack((
-        np.ones(len(df)),
-        df["SoH"].values / 100.0,
-        df["Re"].values * 10.0,
-        df["ambient_temperature"].values,
-        df["Time_normalized"].values,
-    )).astype(np.float32)
-    targets = (df["Temperature_measured"].values - df["ambient_temperature"].values) / TEMP_SCALE_C
+    points = np.column_stack(
+        (
+            np.ones(len(df)),
+            _column(df, "SoH") / 100.0,
+            _column(df, "Re") * 10.0,
+            _column(df, "ambient_temperature"),
+            _column(df, "Time_normalized"),
+        )
+    ).astype(np.float32)
+    targets = (_column(df, "Temperature_measured") - _column(df, "ambient_temperature")) / TEMP_SCALE_C
     return points, targets.astype(np.float32)

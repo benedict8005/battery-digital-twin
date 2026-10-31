@@ -1,5 +1,9 @@
 """GPU-native linear interpolation of the representative discharge profile."""
+
+from typing import Any
+
 import torch
+from torch import Tensor
 
 # Two breakpoints closer than this fraction of the breakpoint range are treated as the same
 # point. The pooled profile's Time_normalized values come from many cycles, so values that are
@@ -8,14 +12,14 @@ import torch
 MIN_RELATIVE_SPACING = 1e-6
 
 
-def default_device():
+def default_device() -> torch.device:
     """CUDA when usable, otherwise CPU (see :func:`battery_pinn.device.resolve_device`)."""
     from battery_pinn.device import resolve_device
 
     return resolve_device("auto", log=None)
 
 
-def _min_spacing(xp, min_spacing):
+def _min_spacing(xp: Tensor, min_spacing: float | None) -> Tensor:
     """Gap below which two breakpoints count as coincident (a 0-d tensor, no host sync)."""
     if min_spacing is not None:
         return torch.as_tensor(float(min_spacing), dtype=xp.dtype, device=xp.device)
@@ -25,13 +29,13 @@ def _min_spacing(xp, min_spacing):
     return torch.maximum(MIN_RELATIVE_SPACING * span, 4.0 * ulp)
 
 
-def _safe_divide(num, den, tol):
+def _safe_divide(num: Tensor, den: Tensor, tol: Tensor) -> Tensor:
     """``num / den`` where ``den >= tol``, else 0 (a step instead of a near-infinite slope)."""
     degenerate = den < tol
     return torch.where(degenerate, torch.zeros_like(num), num / torch.where(degenerate, torch.ones_like(den), den))
 
 
-def _edge_slopes(xp, fp, tol):
+def _edge_slopes(xp: Tensor, fp: Tensor, tol: Tensor) -> tuple[Tensor, Tensor]:
     """Extrapolation slopes at both ends, taken to the nearest breakpoint at least ``tol`` away.
 
     Zero (constant extrapolation) when every breakpoint lies within ``tol`` of that end.
@@ -44,7 +48,7 @@ def _edge_slopes(xp, fp, tol):
     return lower, upper
 
 
-def torch_interp(x, xp, fp, min_spacing=None):
+def torch_interp(x: Tensor, xp: Tensor, fp: Tensor, min_spacing: float | None = None) -> Tensor:
     """1D linear interpolation with linear extrapolation at the edges.
 
     ``x``, ``xp``, ``fp`` are torch tensors; ``xp`` must be sorted ascending (duplicates and
@@ -77,10 +81,10 @@ def torch_interp(x, xp, fp, min_spacing=None):
 class DischargeProfile:
     """Lookup tables (time -> current, voltage, SoC) held on one device."""
 
-    def __init__(self, df_agg, device=None):
+    def __init__(self, df_agg: Any, device: str | torch.device | None = None) -> None:
         self.device = torch.device(device) if device is not None else default_device()
 
-        def tensor(col):
+        def tensor(col: str) -> Tensor:
             return torch.tensor(df_agg[col].values, dtype=torch.float32, device=self.device)
 
         self.t = tensor("Time_normalized")
@@ -88,7 +92,7 @@ class DischargeProfile:
         self.voltage = tensor("Voltage_measured")
         self.soc = tensor("SoC")
 
-    def at(self, t_norm):
+    def at(self, t_norm: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         """Return (I, V, SoC) at normalised times, shaped (N, 1) on t_norm's device."""
         t_flat = t_norm.view(-1).to(self.device)
         out_device = t_norm.device

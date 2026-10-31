@@ -13,6 +13,7 @@ Expected survival with the default config (see test_etl.py):
   B0005 2/5, B0006 2/2, B0025 2/2, B0030 1/1, B0036 1/1, B0042 1/2, B0047 2/3, B0056 2/3
   -> 13 of 19 candidate cycles; train = B0005 + B0006 (4 cycles), held-out = 9 cycles.
 """
+
 import os
 
 import numpy as np
@@ -36,8 +37,12 @@ def _tests_run_on_cpu():
 
 
 RAW_CYCLE_COLUMNS = [
-    "Voltage_measured", "Current_measured", "Temperature_measured",
-    "Current_load", "Voltage_load", "Time",
+    "Voltage_measured",
+    "Current_measured",
+    "Temperature_measured",
+    "Current_load",
+    "Voltage_load",
+    "Time",
 ]
 
 
@@ -58,14 +63,16 @@ def make_cycle_frame(n, ambient, drop_at=None, v_high=4.1, v_mid=3.2, v_low=1.9,
     time = np.cumsum(rng.uniform(9.0, 11.0, n)) - 9.0 + rng.uniform(0.0, 2.0)
     current = -2.0 + rng.normal(0.0, 0.01, n)
     temperature = ambient + 8.0 * (1 - np.exp(-np.arange(n) / (0.4 * n))) + rng.normal(0, 0.05, n)
-    return pd.DataFrame({
-        "Voltage_measured": voltage,
-        "Current_measured": current,
-        "Temperature_measured": temperature,
-        "Current_load": np.abs(current),
-        "Voltage_load": voltage - 0.05,
-        "Time": time,
-    })[RAW_CYCLE_COLUMNS]
+    return pd.DataFrame(
+        {
+            "Voltage_measured": voltage,
+            "Current_measured": current,
+            "Temperature_measured": temperature,
+            "Current_load": np.abs(current),
+            "Voltage_load": voltage - 0.05,
+            "Time": time,
+        }
+    )[RAW_CYCLE_COLUMNS]
 
 
 # Each battery: ambient, list of (type, start_time args, extra fields, cycle spec or None).
@@ -175,18 +182,20 @@ def build_raw_dataset(root, spec=RAW_SPEC, shuffle_seed=1):
             else:
                 sci = len(when) == 7 and when[6] == "sci"
                 start_time = np_style(*when[:6], sci=sci)
-            records.append({
-                "type": row_type,
-                "start_time": start_time,
-                "ambient_temperature": bspec["ambient"],
-                "battery_id": battery_id,
-                "test_id": uid,
-                "uid": uid,
-                "filename": filename,
-                "Capacity": extra.get("Capacity", np.nan),
-                "Re": extra.get("Re", np.nan),
-                "Rct": extra.get("Rct", np.nan),
-            })
+            records.append(
+                {
+                    "type": row_type,
+                    "start_time": start_time,
+                    "ambient_temperature": bspec["ambient"],
+                    "battery_id": battery_id,
+                    "test_id": uid,
+                    "uid": uid,
+                    "filename": filename,
+                    "Capacity": extra.get("Capacity", np.nan),
+                    "Re": extra.get("Re", np.nan),
+                    "Rct": extra.get("Rct", np.nan),
+                }
+            )
             if cycle is not None and cycle.get("write", True):
                 frame = make_cycle_frame(cycle["n"], bspec["ambient"], cycle["drop_at"], seed=uid)
                 frame.to_csv(os.path.join(root, "data", filename), index=False)
@@ -219,18 +228,34 @@ def write_fake_mat(path, battery_id, n_samples=120, ambient=24.0):
     def struct(**fields):
         return np.array([[tuple(fields.values())]], dtype=[(k, "O") for k in fields])
 
-    charge = struct(Voltage_measured=volts[::-1], Current_measured=np.full(n_samples, 1.5),
-                    Temperature_measured=np.full(n_samples, ambient), Current_charge=np.full(n_samples, 1.5),
-                    Voltage_charge=volts[::-1], Time=t)
-    impedance = struct(Sense_current=np.ones(5, dtype=complex), Battery_current=np.ones(5, dtype=complex),
-                       Current_ratio=np.ones(5, dtype=complex), Battery_impedance=np.ones(5, dtype=complex),
-                       Rectified_Impedance=np.ones(3, dtype=complex), Re=np.array([[0.05]]), Rct=np.array([[0.1]]))
+    charge = struct(
+        Voltage_measured=volts[::-1],
+        Current_measured=np.full(n_samples, 1.5),
+        Temperature_measured=np.full(n_samples, ambient),
+        Current_charge=np.full(n_samples, 1.5),
+        Voltage_charge=volts[::-1],
+        Time=t,
+    )
+    impedance = struct(
+        Sense_current=np.ones(5, dtype=complex),
+        Battery_current=np.ones(5, dtype=complex),
+        Current_ratio=np.ones(5, dtype=complex),
+        Battery_impedance=np.ones(5, dtype=complex),
+        Rectified_Impedance=np.ones(3, dtype=complex),
+        Re=np.array([[0.05]]),
+        Rct=np.array([[0.1]]),
+    )
 
     def discharge(capacity):
-        return struct(Voltage_measured=volts, Current_measured=np.full(n_samples, -2.0),
-                      Temperature_measured=ambient + np.linspace(0, 6, n_samples),
-                      Current_load=np.full(n_samples, 2.0), Voltage_load=volts - 0.05, Time=t,
-                      Capacity=np.array([[capacity]]))
+        return struct(
+            Voltage_measured=volts,
+            Current_measured=np.full(n_samples, -2.0),
+            Temperature_measured=ambient + np.linspace(0, 6, n_samples),
+            Current_load=np.full(n_samples, 2.0),
+            Voltage_load=volts - 0.05,
+            Time=t,
+            Capacity=np.array([[capacity]]),
+        )
 
     cycles = [
         ("charge", [2008, 4, 2, 12, 0, 0.0], charge),
@@ -238,8 +263,9 @@ def write_fake_mat(path, battery_id, n_samples=120, ambient=24.0):
         ("discharge", [2008, 4, 2, 15, 25, 41.0], discharge(1.85)),
         ("discharge", [2008, 4, 3, 10, 0, 0.0], discharge(1.80)),
     ]
-    cycle_arr = np.empty((1, len(cycles)), dtype=[("type", "O"), ("ambient_temperature", "O"),
-                                                  ("time", "O"), ("data", "O")])
+    cycle_arr = np.empty(
+        (1, len(cycles)), dtype=[("type", "O"), ("ambient_temperature", "O"), ("time", "O"), ("data", "O")]
+    )
     for i, (ctype, when, data) in enumerate(cycles):
         cycle_arr[0, i] = (np.array([ctype]), np.array([[ambient]]), np.array([when], dtype=float), data)
     os.makedirs(os.path.dirname(str(path)), exist_ok=True)

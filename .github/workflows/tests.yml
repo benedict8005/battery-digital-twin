@@ -73,3 +73,23 @@ jobs:
       - run: pip install numpy pandas scipy matplotlib pytest
       - name: Run tests (src/ is on the path via pyproject's pytest config)
         run: python -m pytest -q -ra
+
+  lint:
+    # Static checks beside the tests.
+    name: lint and type check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install numpy pandas scipy matplotlib pytest ruff mypy pandas-stubs scipy-stubs
+      - name: ruff check
+        run: ruff check .
+      - name: ruff format
+        run: ruff format --check .
+      - name: mypy
+        run: mypy

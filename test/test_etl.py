@@ -4,6 +4,7 @@ Covers each medallion layer against hand-computed expectations from the fixture 
 ``conftest.py``, and checks the feature-engineering stage against a verbatim copy of the
 original Databricks loop so the port is proven equivalent rather than merely plausible.
 """
+
 import os
 
 import numpy as np
@@ -55,14 +56,19 @@ def test_bronze_reports_missing_columns(tmp_path):
 # ----------------------------------------------------------------------------------------
 # Silver: start_time parsing and cycle numbering
 # ----------------------------------------------------------------------------------------
-@pytest.mark.parametrize("text, expected", [
-    ("[2008.    4.    2.   15.   25.   41.]", pd.Timestamp("2008-04-02 15:25:41")),
-    ("[2.008e+03 4.000e+00 2.000e+00 1.500e+01 2.500e+01 4.100e+01]", pd.Timestamp("2008-04-02 15:25:41")),
-    ("[2008.  6.  1. 10.  0. 17.234]", pd.Timestamp("2008-06-01 10:00:17.234")),
-    ("[2008. 6. 1. 10. 0. 17.3]", pd.Timestamp("2008-06-01 10:00:17.300")),  # no binary round-off
-    ("[2.00800000e+03 4.00000000e+00 6.00000000e+00 1.00000000e+01\n 0.00000000e+00 0.00000000e+00]",
-     pd.Timestamp("2008-04-06 10:00:00")),  # numpy line-wraps long arrays
-])
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("[2008.    4.    2.   15.   25.   41.]", pd.Timestamp("2008-04-02 15:25:41")),
+        ("[2.008e+03 4.000e+00 2.000e+00 1.500e+01 2.500e+01 4.100e+01]", pd.Timestamp("2008-04-02 15:25:41")),
+        ("[2008.  6.  1. 10.  0. 17.234]", pd.Timestamp("2008-06-01 10:00:17.234")),
+        ("[2008. 6. 1. 10. 0. 17.3]", pd.Timestamp("2008-06-01 10:00:17.300")),  # no binary round-off
+        (
+            "[2.00800000e+03 4.00000000e+00 6.00000000e+00 1.00000000e+01\n 0.00000000e+00 0.00000000e+00]",
+            pd.Timestamp("2008-04-06 10:00:00"),
+        ),  # numpy line-wraps long arrays
+    ],
+)
 def test_parse_start_time_formats(text, expected):
     parsed = etl.parse_start_time(pd.Series([text]))
     assert parsed.loc[0, "n_parts"] == 6
@@ -85,11 +91,25 @@ def test_silver_discharge_only_keeps_discharge_rows_of_non_excluded_batteries(la
     discharge = layers["discharge"]
     assert set(discharge["type"]) == {"discharge"}
     assert not set(discharge["battery_id"]) & set(config.EXCLUDED_BATTERIES)
-    assert set(discharge["battery_id"]) == {"B0005", "B0006", "B0025", "B0030", "B0036", "B0042",
-                                            "B0047", "B0056", "B0099"}
+    assert set(discharge["battery_id"]) == {
+        "B0005",
+        "B0006",
+        "B0025",
+        "B0030",
+        "B0036",
+        "B0042",
+        "B0047",
+        "B0056",
+        "B0099",
+    }
     assert list(discharge.columns) == [
-        "battery_id", "type", "filename", "ambient_temperature", "capacity",
-        "start_datetime", "cycle_number",
+        "battery_id",
+        "type",
+        "filename",
+        "ambient_temperature",
+        "capacity",
+        "start_datetime",
+        "cycle_number",
     ]
 
 
@@ -129,8 +149,15 @@ def test_gold_has_one_row_per_discharge_file(layers):
     gold, discharge = layers["gold"], layers["discharge"]
     assert len(gold) == len(discharge) == gold["filename"].nunique()
     assert list(gold.columns) == [
-        "battery_id", "type", "filename", "ambient_temperature", "start_datetime",
-        "cycle_number", "capacity", "Re", "Rct",
+        "battery_id",
+        "type",
+        "filename",
+        "ambient_temperature",
+        "start_datetime",
+        "cycle_number",
+        "capacity",
+        "Re",
+        "Rct",
     ]
 
 
@@ -168,15 +195,26 @@ def test_gold_numeric_columns_are_float32_like_the_delta_table(layers):
 
 
 def test_gold_keeps_first_row_per_duplicate_filename():
-    discharge = pd.DataFrame({
-        "battery_id": ["B0005", "B0005"], "type": "discharge", "filename": "same.csv",
-        "ambient_temperature": 24, "capacity": [1.8, 1.7],
-        "start_datetime": pd.to_datetime(["2008-04-05", "2008-04-02"]), "cycle_number": [2, 1],
-    })
-    impedance = pd.DataFrame({
-        "battery_id": ["B0005"], "Re": [0.05], "Rct": [0.1],
-        "start_datetime": pd.to_datetime(["2008-04-01"]), "cycle_number": [1],
-    })
+    discharge = pd.DataFrame(
+        {
+            "battery_id": ["B0005", "B0005"],
+            "type": "discharge",
+            "filename": "same.csv",
+            "ambient_temperature": 24,
+            "capacity": [1.8, 1.7],
+            "start_datetime": pd.to_datetime(["2008-04-05", "2008-04-02"]),
+            "cycle_number": [2, 1],
+        }
+    )
+    impedance = pd.DataFrame(
+        {
+            "battery_id": ["B0005"],
+            "Re": [0.05],
+            "Rct": [0.1],
+            "start_datetime": pd.to_datetime(["2008-04-01"]),
+            "cycle_number": [1],
+        }
+    )
     gold = etl.build_gold(discharge, impedance)
     assert len(gold) == 1
     assert gold.loc[0, "start_datetime"] == pd.Timestamp("2008-04-02")
@@ -189,10 +227,10 @@ def test_truncate_at_cutoff_keeps_rows_before_first_sample_below_limit():
     volts = [3.0] * 10 + [2.7, 2.7, 2.69, 3.0, 2.0]
     cycle = pd.DataFrame({"Voltage_measured": volts})
     truncated = etl.truncate_at_cutoff(cycle, 2.7)
-    assert len(truncated) == 12            # 2.7 == cutoff is kept; 2.69 is the first below
+    assert len(truncated) == 12  # 2.7 == cutoff is kept; 2.69 is the first below
     assert truncated.index.tolist() == list(range(12))
-    assert len(etl.truncate_at_cutoff(cycle, 2.0)) == 15   # nothing below -> untouched
-    assert len(etl.truncate_at_cutoff(cycle, 3.5)) == 0    # first sample already below
+    assert len(etl.truncate_at_cutoff(cycle, 2.0)) == 15  # nothing below -> untouched
+    assert len(etl.truncate_at_cutoff(cycle, 3.5)) == 0  # first sample already below
 
 
 def test_soc_is_coulomb_counting_from_100_percent():
@@ -205,22 +243,32 @@ def test_soc_is_coulomb_counting_from_100_percent():
 
 def test_downsample_cycle_averages_fixed_number_of_bins():
     n = 200
-    cycle = pd.DataFrame({
-        "Time": np.arange(n, dtype=float), "Voltage_measured": np.linspace(4, 3, n),
-        "Current_measured": -2.0, "Temperature_measured": 25.0, "SoC": np.linspace(100, 0, n),
-    })
+    cycle = pd.DataFrame(
+        {
+            "Time": np.arange(n, dtype=float),
+            "Voltage_measured": np.linspace(4, 3, n),
+            "Current_measured": -2.0,
+            "Temperature_measured": 25.0,
+            "SoC": np.linspace(100, 0, n),
+        }
+    )
     agg = etl.downsample_cycle(cycle.copy(), num_bins=50)
     assert len(agg) == 50
     assert agg["bin"].tolist() == list(range(50))
     assert agg["Time"].tolist() == pytest.approx([4 * i + 1.5 for i in range(50)])  # mean of 4 rows
-    assert list(agg.columns) == ["bin", "Time", "Voltage_measured", "Current_measured",
-                                 "Temperature_measured", "SoC"]
+    assert list(agg.columns) == ["bin", "Time", "Voltage_measured", "Current_measured", "Temperature_measured", "SoC"]
     assert len(etl.downsample_cycle(cycle.copy())) == config.BINS_PER_CYCLE
 
 
 def _meta(**overrides):
-    meta = {"battery_id": "B0005", "cycle_number": 3, "capacity": np.float32(1.8),
-            "Re": np.float32(0.05), "Rct": np.float32(0.1), "ambient_temperature": 24}
+    meta = {
+        "battery_id": "B0005",
+        "cycle_number": 3,
+        "capacity": np.float32(1.8),
+        "Re": np.float32(0.05),
+        "Rct": np.float32(0.1),
+        "ambient_temperature": 24,
+    }
     meta.update(overrides)
     return pd.Series(meta)
 
@@ -263,7 +311,8 @@ def test_process_cycle_labels_and_normalised_time():
 
 def test_process_cycle_missing_impedance_and_capacity_pass_through():
     frame, reason = etl.process_cycle(
-        make_cycle_frame(100, 24, drop_at=None), _meta(Re=np.nan, Rct=np.nan, capacity=np.nan), 2.0, 2.7)
+        make_cycle_frame(100, 24, drop_at=None), _meta(Re=np.nan, Rct=np.nan, capacity=np.nan), 2.0, 2.7
+    )
     assert reason is None  # NaN capacity is not "<= 1.4": the original did not skip it either
     assert frame["Re"].isna().all() and frame["Rct"].isna().all()
     assert frame["SoH"].isna().all() and frame["SoC"].isna().all()
@@ -275,19 +324,25 @@ def test_process_cycle_missing_impedance_and_capacity_pass_through():
 # ----------------------------------------------------------------------------------------
 def test_feature_table_summary_and_skip_counts(layers, raw_dataset):
     dataset, summary = etl.build_feature_table(layers["gold"], raw_dataset)
-    assert summary["total_candidates"] == 19          # B0049 excluded, B0099 not a target
+    assert summary["total_candidates"] == 19  # B0049 excluded, B0099 not a target
     assert summary["total_kept"] == 13
     assert summary["skip_counts"] == {"file_not_found": 1, "too_short": 2, "low_capacity": 3}
     per = summary["per_battery"]
-    assert list(per) == config.TARGET_BATTERIES          # every designated battery, in order
+    assert list(per) == config.TARGET_BATTERIES  # every designated battery, in order
     assert per["B0005"]["candidates"] == 5 and per["B0005"]["kept"] == 2
     assert per["B0005"]["dropped"] == {"file_not_found": 1, "too_short": 1, "low_capacity": 1}
     assert per["B0005"]["role"] == "train" and per["B0025"]["role"] == "held-out"
     assert per["B0042"]["dropped"]["too_short"] == 1 and per["B0042"]["kept"] == 1
     absent = per["B0007"]
-    assert absent == {"role": "train", "present": False, "capacity_floor_ah": config.MIN_VALID_CAPACITY_AH,
-                      "max_capacity_ah": pytest.approx(np.nan, nan_ok=True), "candidates": 0, "kept": 0,
-                      "dropped": {"file_not_found": 0, "too_short": 0, "low_capacity": 0}}
+    assert absent == {
+        "role": "train",
+        "present": False,
+        "capacity_floor_ah": config.MIN_VALID_CAPACITY_AH,
+        "max_capacity_ah": pytest.approx(np.nan, nan_ok=True),
+        "candidates": 0,
+        "kept": 0,
+        "dropped": {"file_not_found": 0, "too_short": 0, "low_capacity": 0},
+    }
     assert len(dataset) == 13 * config.BINS_PER_CYCLE
     assert list(dataset.columns) == config.PROCESSED_COLUMNS
     assert set(dataset["battery_id"]) == {"B0005", "B0006", "B0025", "B0030", "B0036", "B0042", "B0047", "B0056"}
@@ -336,8 +391,7 @@ def test_feature_table_default_cutoff_for_unknown_battery(layers, raw_dataset):
     gold = layers["gold"]
     with_unknown = etl.build_feature_table(gold, raw_dataset, target_batteries=["B0099"], cutoff_map={})
     assert with_unknown[1]["total_kept"] == 2
-    strict = etl.build_feature_table(gold, raw_dataset, target_batteries=["B0099"], cutoff_map={},
-                                     default_cutoff=5.0)
+    strict = etl.build_feature_table(gold, raw_dataset, target_batteries=["B0099"], cutoff_map={}, default_cutoff=5.0)
     assert strict[1]["skip_counts"]["too_short"] == 2 and strict[0].empty
 
 
@@ -354,13 +408,21 @@ def test_split_is_by_battery(layers, raw_dataset):
 def _battery(role, candidates, kept, present=True, **dropped):
     d = {"file_not_found": 0, "too_short": 0, "low_capacity": 0}
     d.update(dropped)
-    return {"role": role, "present": present, "capacity_floor_ah": 1.4, "max_capacity_ah": 1.8,
-            "candidates": candidates, "kept": kept, "dropped": d}
+    return {
+        "role": role,
+        "present": present,
+        "capacity_floor_ah": 1.4,
+        "max_capacity_ah": 1.8,
+        "candidates": candidates,
+        "kept": kept,
+        "dropped": d,
+    }
 
 
 def test_format_summary_reports_every_designated_battery_and_flags_problems():
     summary = {
-        "total_candidates": 20, "total_kept": 3,
+        "total_candidates": 20,
+        "total_kept": 3,
         "skip_counts": {"file_not_found": 0, "too_short": 8, "low_capacity": 9},
         "per_battery": {
             "B0005": _battery("train", 5, 0, too_short=5),
@@ -375,7 +437,10 @@ def test_format_summary_reports_every_designated_battery_and_flags_problems():
     assert "WARNING: over half of all cycles were skipped" in text
     assert "B0005: 0/5 cycles kept, dropped: 5 too_short" in text and "ZERO cycles survived!" in text
     assert "B0007: MISSING from raw metadata" in text
-    assert "B0025 [HELD-OUT]: 2/5 cycles kept, dropped: 3 low_capacity (capacity floor 1.400 Ah, best cycle 1.800 Ah)" in text
+    assert (
+        "B0025 [HELD-OUT]: 2/5 cycles kept, dropped: 3 low_capacity (capacity floor 1.400 Ah, best cycle 1.800 Ah)"
+        in text
+    )
     assert "B0030 [HELD-OUT]: 1/10 cycles kept, dropped: 3 too_short, 6 low_capacity" in text
     assert "<-- fewer than 20% of cycles survived" in text
     assert "B0056 [HELD-OUT]: MISSING from raw metadata" in text
@@ -386,13 +451,17 @@ def test_format_summary_reports_every_designated_battery_and_flags_problems():
 
 
 def test_coverage_problems_explains_zero_survival_of_held_out_battery():
-    summary = {"per_battery": {
-        "B0005": _battery("train", 5, 0, too_short=5),                       # training battery: not fatal
-        "B0056": _battery("held-out", 102, 0, low_capacity=102) | {"capacity_floor_ah": 1.4, "max_capacity_ah": 1.344},
-    }}
+    summary = {
+        "per_battery": {
+            "B0005": _battery("train", 5, 0, too_short=5),  # training battery: not fatal
+            "B0056": _battery("held-out", 102, 0, low_capacity=102)
+            | {"capacity_floor_ah": 1.4, "max_capacity_ah": 1.344},
+        }
+    }
     problems = etl.coverage_problems(summary)
-    assert problems == ["B0056: 0 of 102 cycles survived (102 low_capacity; capacity floor 1.400 Ah, "
-                        "best cycle 1.344 Ah)"]
+    assert problems == [
+        "B0056: 0 of 102 cycles survived (102 low_capacity; capacity floor 1.400 Ah, best cycle 1.344 Ah)"
+    ]
 
 
 def test_run_pipeline_writes_tables_the_trainer_can_load(raw_dataset, tmp_path):
@@ -400,8 +469,13 @@ def test_run_pipeline_writes_tables_the_trainer_can_load(raw_dataset, tmp_path):
     messages = []
     summary = etl.run_pipeline(raw_dataset, str(out), log=messages.append)
 
-    for table in (config.SILVER_DISCHARGE_TABLE, config.SILVER_IMPEDANCE_TABLE, config.GOLD_TABLE,
-                  config.TRAIN_TABLE, config.HELD_OUT_TABLE):
+    for table in (
+        config.SILVER_DISCHARGE_TABLE,
+        config.SILVER_IMPEDANCE_TABLE,
+        config.GOLD_TABLE,
+        config.TRAIN_TABLE,
+        config.HELD_OUT_TABLE,
+    ):
         assert os.path.isfile(summary["outputs"][table])
         assert summary["outputs"][table] == config.table_path(str(out), table)
 
@@ -417,15 +491,20 @@ def test_run_pipeline_writes_tables_the_trainer_can_load(raw_dataset, tmp_path):
     assert set(held_out["battery_id"]) == set(config.HELD_OUT_BATTERIES)
     text = "\n".join(messages)
     assert "Total candidate cycles:   19" in text
-    assert "B0007: MISSING from raw metadata" in text      # designated but not in this fixture
+    assert "B0007: MISSING from raw metadata" in text  # designated but not in this fixture
     assert "B0056 [HELD-OUT]: 2/3 cycles kept, dropped: 1 low_capacity" in text
 
 
 def test_run_pipeline_fails_loudly_when_nothing_survives(tmp_path):
     root = tmp_path / "raw"
-    spec = {"B0005": {"ambient": 24, "rows": [
-        ("discharge", (2008, 4, 2, 15, 25, 41), {"Capacity": 1.8}, {"n": 100, "drop_at": 10}),  # too short
-    ]}}
+    spec = {
+        "B0005": {
+            "ambient": 24,
+            "rows": [
+                ("discharge", (2008, 4, 2, 15, 25, 41), {"Capacity": 1.8}, {"n": 100, "drop_at": 10}),  # too short
+            ],
+        }
+    }
     build_raw_dataset(str(root), spec=spec)
     with pytest.raises(RuntimeError, match="No cycles survived"):
         etl.run_pipeline(str(root), str(tmp_path / "out"), log=lambda *_: None)
@@ -486,53 +565,63 @@ def _original_feature_engineering(discharge_metadata, max_caps_df, raw_data_dir)
 
         df = pd.read_csv(file_path).copy()
 
-        v_limit = cutoff_map.get(row['battery_id'], 2.7)
-        cutoff_idx = df[df['Voltage_measured'] < v_limit].index.min()
+        v_limit = cutoff_map.get(row["battery_id"], 2.7)
+        cutoff_idx = df[df["Voltage_measured"] < v_limit].index.min()
         truncated_df = df if pd.isna(cutoff_idx) else df.iloc[:cutoff_idx].copy()
 
         if len(truncated_df) < MIN_SAMPLES_PER_CYCLE:
             continue
 
-        db_capacity = float(row['capacity'])
-        max_capacity = max_caps_df.loc[row['battery_id'], 'max_cap']
+        db_capacity = float(row["capacity"])
+        max_capacity = max_caps_df.loc[row["battery_id"], "max_cap"]
 
         if db_capacity <= config.capacity_floor(max_capacity):
             continue
 
-        truncated_df['Time_diff_hr'] = truncated_df['Time'].diff().fillna(0) / 3600
-        truncated_df['Delta_Q'] = abs(truncated_df['Current_measured'] * truncated_df['Time_diff_hr'])
-        truncated_df['Cumulative_Q'] = truncated_df['Delta_Q'].cumsum()
-        truncated_df['SoC'] = 100 * (1 - truncated_df['Cumulative_Q'] / db_capacity)
+        truncated_df["Time_diff_hr"] = truncated_df["Time"].diff().fillna(0) / 3600
+        truncated_df["Delta_Q"] = abs(truncated_df["Current_measured"] * truncated_df["Time_diff_hr"])
+        truncated_df["Cumulative_Q"] = truncated_df["Delta_Q"].cumsum()
+        truncated_df["SoC"] = 100 * (1 - truncated_df["Cumulative_Q"] / db_capacity)
 
         num_bins = 50
-        truncated_df['bin'] = pd.cut(truncated_df.index, bins=num_bins, labels=False)
+        truncated_df["bin"] = pd.cut(truncated_df.index, bins=num_bins, labels=False)
 
-        agg_cycle = truncated_df.groupby('bin').agg({
-            'Time': 'mean',
-            'Voltage_measured': 'mean',
-            'Current_measured': 'mean',
-            'Temperature_measured': 'mean',
-            'SoC': 'mean'
-        }).reset_index()
+        agg_cycle = (
+            truncated_df.groupby("bin")
+            .agg(
+                {
+                    "Time": "mean",
+                    "Voltage_measured": "mean",
+                    "Current_measured": "mean",
+                    "Temperature_measured": "mean",
+                    "SoC": "mean",
+                }
+            )
+            .reset_index()
+        )
 
-        agg_cycle['battery_id'] = row['battery_id']
-        agg_cycle['cycle_number'] = row['cycle_number']
-        agg_cycle['SoH'] = float((db_capacity / max_capacity) * 100)
-        agg_cycle['Re'] = float(row['Re']) if pd.notna(row['Re']) else None
-        agg_cycle['Rct'] = float(row['Rct']) if pd.notna(row['Rct']) else None
-        agg_cycle['ambient_temperature'] = float(row['ambient_temperature']) if pd.notna(row['ambient_temperature']) else None
-        agg_cycle['Time_normalized'] = agg_cycle['Time'] / agg_cycle['Time'].max()
+        agg_cycle["battery_id"] = row["battery_id"]
+        agg_cycle["cycle_number"] = row["cycle_number"]
+        agg_cycle["SoH"] = float((db_capacity / max_capacity) * 100)
+        agg_cycle["Re"] = float(row["Re"]) if pd.notna(row["Re"]) else None
+        agg_cycle["Rct"] = float(row["Rct"]) if pd.notna(row["Rct"]) else None
+        agg_cycle["ambient_temperature"] = (
+            float(row["ambient_temperature"]) if pd.notna(row["ambient_temperature"]) else None
+        )
+        agg_cycle["Time_normalized"] = agg_cycle["Time"] / agg_cycle["Time"].max()
 
         processed_dfs.append(agg_cycle)
 
     full_dataset = pd.concat(processed_dfs, ignore_index=True)
-    train_dataset = full_dataset[~full_dataset['battery_id'].isin(config.HELD_OUT_BATTERIES)].reset_index(drop=True)
-    held_out_dataset = full_dataset[full_dataset['battery_id'].isin(config.HELD_OUT_BATTERIES)].reset_index(drop=True)
+    train_dataset = full_dataset[~full_dataset["battery_id"].isin(config.HELD_OUT_BATTERIES)].reset_index(drop=True)
+    held_out_dataset = full_dataset[full_dataset["battery_id"].isin(config.HELD_OUT_BATTERIES)].reset_index(drop=True)
     return train_dataset, held_out_dataset
 
 
 @pytest.mark.filterwarnings("ignore::FutureWarning")  # the oracle concatenates None-valued columns
-@pytest.mark.parametrize("fraction", [config.MIN_CAPACITY_FRACTION_OF_MAX, None], ids=["relative-floor", "absolute-floor"])
+@pytest.mark.parametrize(
+    "fraction", [config.MIN_CAPACITY_FRACTION_OF_MAX, None], ids=["relative-floor", "absolute-floor"]
+)
 def test_feature_engineering_matches_original_databricks_loop(layers, raw_dataset, monkeypatch, fraction):
     monkeypatch.setattr(config, "MIN_CAPACITY_FRACTION_OF_MAX", fraction)
     gold = layers["gold"]

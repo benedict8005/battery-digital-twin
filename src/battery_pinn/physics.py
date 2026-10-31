@@ -1,25 +1,35 @@
 """Coupled thermal / SEI-stability PDE system and Arrhenius helpers."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+
+import deepxde as dde
 import numpy as np
 import torch
-import deepxde as dde
 
 from battery_pinn import config
 from battery_pinn.ocv import ocv_from_soc_torch
 
 
-def arrhenius_exponents(temps_c, ea=config.EA_SEI, r_gas=config.R_GAS):
+def arrhenius_exponents(temps_c: Any, ea: float = config.EA_SEI, r_gas: float = config.R_GAS) -> np.ndarray:
     """Unclamped Arrhenius exponent -Ea/(R*T) at the given Celsius temperatures."""
     temps_k = np.asarray(temps_c, dtype=float) + 273.15
     return -ea / (r_gas * temps_k)
 
 
-def recommended_log_a_sei(ea=config.EA_SEI, r_gas=config.R_GAS, t_ref_k=config.REFERENCE_TEMP_K):
+def recommended_log_a_sei(
+    ea: float = config.EA_SEI,
+    r_gas: float = config.R_GAS,
+    t_ref_k: float = config.REFERENCE_TEMP_K,
+) -> float:
     """Starting log10(A_sei) that makes the reaction rate O(1) at the reference temperature."""
     exponent = -ea / (r_gas * t_ref_k)
     return float(-exponent / np.log(10))
 
 
-def make_thermal_variables():
+def make_thermal_variables() -> dict[str, Any]:
     """Trainable log10 thermal constants (``--learn-thermal``), initialised at the config values.
 
     Returns ``{"log10_k_cond", "log10_thermal_mass", "log10_newton_coeff"}`` as dde.Variables;
@@ -32,7 +42,14 @@ def make_thermal_variables():
     }
 
 
-def make_pde(profile, ocv_coeffs, log_a_sei, t_max_seconds, newton_cooling=False, thermal=None):
+def make_pde(
+    profile: Any,
+    ocv_coeffs: Any,
+    log_a_sei: Any,
+    t_max_seconds: float,
+    newton_cooling: bool = False,
+    thermal: dict[str, Any] | None = None,
+) -> Callable[[Any, Any], list[Any]]:
     """Build the PDE residual function for DeepXDE.
 
     Input columns are [space(0), SoH(1), Re(2), Ambient(3), time(4)];
@@ -45,14 +62,18 @@ def make_pde(profile, ocv_coeffs, log_a_sei, t_max_seconds, newton_cooling=False
     * ``thermal`` (from :func:`make_thermal_variables`) replaces ``K_COND``, ``RHO * CP`` and
       ``h`` by trainable log10 variables.
     """
-    def constants():
+
+    def constants() -> tuple[Any, Any, Any]:
         # Evaluated inside the residual so the autograd graph is rebuilt on every call.
         if thermal is None:
             return float(config.K_COND), float(config.RHO * config.CP), float(config.NEWTON_COOLING_COEFF)
-        return (torch.pow(10.0, thermal["log10_k_cond"]), torch.pow(10.0, thermal["log10_thermal_mass"]),
-                torch.pow(10.0, thermal["log10_newton_coeff"]))
+        return (
+            torch.pow(10.0, thermal["log10_k_cond"]),
+            torch.pow(10.0, thermal["log10_thermal_mass"]),
+            torch.pow(10.0, thermal["log10_newton_coeff"]),
+        )
 
-    def sei_thermal_pde(x, y):
+    def sei_thermal_pde(x: Any, y: Any) -> list[Any]:
         k_cond, thermal_mass, newton_coeff = constants()
         T_delta = y[:, 0:1]
         c = y[:, 1:2]
@@ -72,8 +93,10 @@ def make_pde(profile, ocv_coeffs, log_a_sei, t_max_seconds, newton_cooling=False
         joule_heat = torch.abs(I * (V - U_ocv))
 
         exponent = -config.EA_SEI / (config.R_GAS * T_safe + 1e-6)
-        rate = actual_A_sei * c_safe * torch.exp(
-            torch.clamp(exponent, min=config.EXPONENT_CLAMP_MIN, max=config.EXPONENT_CLAMP_MAX)
+        rate = (
+            actual_A_sei
+            * c_safe
+            * torch.exp(torch.clamp(exponent, min=config.EXPONENT_CLAMP_MIN, max=config.EXPONENT_CLAMP_MAX))
         )
 
         sources = k_cond * dT_xx * config.TEMP_SCALE_C + joule_heat + config.H_SEI * rate

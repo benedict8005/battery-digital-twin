@@ -1,4 +1,5 @@
 """Checkpoint save / load for the trained network and its calibrated parameters."""
+
 import os
 
 import torch
@@ -30,7 +31,5 @@ def save_checkpoint(path, state_dict, log_a_sei, ocv_coeffs, physics=None):
 def load_checkpoint(path):
     checkpoint = torch.load(path, map_location=torch.device("cpu"))
     if not (isinstance(checkpoint, dict) and all(k in checkpoint for k in REQUIRED_KEYS)):
-        raise RuntimeError(
-            f"{path}: incompatible checkpoint (expected keys {REQUIRED_KEYS}). Retrain to produce one."
-        )
+        raise RuntimeError(f"{path}: incompatible checkpoint (expected keys {REQUIRED_KEYS}). Retrain to produce one.")
     return checkpoint
