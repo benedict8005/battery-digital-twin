@@ -60,3 +60,11 @@ check_untyped_defs = true
 disallow_any_generics = false
 warn_return_any = true
 no_implicit_reexport = true
+
+[tool.coverage.run]
+source = ["battery_pinn"]
+branch = false
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
