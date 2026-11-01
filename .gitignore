@@ -32,3 +32,8 @@ artifacts/
 
 # --- Experiment runs (scripts/run_baseline.sh) ---
 runs/
+
+# coverage data
+.coverage
+coverage.xml
+htmlcov/

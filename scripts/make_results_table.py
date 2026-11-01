@@ -24,6 +24,7 @@ Each ``--run`` is ``NAME ARTIFACTS_DIR DATA_DIR``; ``DATA_DIR`` must hold
 ``train.csv`` and ``held_out.csv`` (or the pre-rename table names) as written by
 ``battery-pinn prepare-data``.
 """
+
 import argparse
 import datetime as dt
 import glob
@@ -53,12 +54,21 @@ DATABRICKS_V9 = {
     "per_battery_held_out_mae_c": {"B0025": 4.2, "B0030": 1.1, "B0036": 11.4, "B0042": 0.9, "B0047": 7.3},
 }
 CORE_T_LABEL = "core T max (°C, unvalidated)"
-VERDICT_NOTE = (f"Core temperature is **unvalidated** (inferred through the physics, never compared with an "
-                f"internal sensor). The verdict uses in-domain sweep points only, i.e. it **excludes ambient > "
-                f"{config.AMBIENT_TRAINED_MAX_C:.0f} °C**; it is a heuristic, not a certified safety result.")
+VERDICT_NOTE = (
+    f"Core temperature is **unvalidated** (inferred through the physics, never compared with an "
+    f"internal sensor). The verdict uses in-domain sweep points only, i.e. it **excludes ambient > "
+    f"{config.AMBIENT_TRAINED_MAX_C:.0f} °C**; it is a heuristic, not a certified safety result."
+)
 VERDICTS = ("DANGER", "WARNING", "SAFE")
-SEED_METRICS = ("train_mae_c", "train_rmse_c", "held_out_mae_c", "held_out_rmse_c",
-                "core_temp_max_c", "sei_min", "threshold")
+SEED_METRICS = (
+    "train_mae_c",
+    "train_rmse_c",
+    "held_out_mae_c",
+    "held_out_rmse_c",
+    "core_temp_max_c",
+    "sei_min",
+    "threshold",
+)
 
 
 # ----------------------------------------------------------------------------------------
@@ -152,27 +162,31 @@ def collect_run(name, artifacts_dir, data_dir, twin_factory=None, log=print):
         training = training_summary.get(seed) or _training_from_history(artifacts_dir, seed)
         # Runs trained before the init was recorded always started from the recommended value.
         init_assumed = training.get("log10_A_sei_init") is None
-        seeds.append({
-            "seed": seed,
-            "checkpoint": path,
-            "A_sei": float(twin.a_sei),
-            "log10_A_sei": math.log10(float(twin.a_sei)) if float(twin.a_sei) > 0 else None,
-            "log10_A_sei_init": recommended_log_a_sei() if init_assumed else training["log10_A_sei_init"],
-            "log10_A_sei_init_assumed": init_assumed,
-            "final_losses": training.get("final_losses") or {},
-            "train_mae_c": tr["mae_c"], "train_rmse_c": tr["rmse_c"],
-            "held_out_mae_c": ho["mae_c"], "held_out_rmse_c": ho["rmse_c"],
-            "per_battery_train_mae_c": tr["per_battery_mae_c"],
-            "per_battery_held_out_mae_c": ho["per_battery_mae_c"],
-            "per_ambient_train_mae_c": amb_tr,
-            "per_ambient_held_out_mae_c": amb_ho,
-            "verdict": ab["verdict"],
-            "criterion": ab.get("criterion", "unknown"),
-            "core_temp_max_c": ab["core_temp_max_c"],
-            "sei_min": ab["sei_min"],
-            "threshold": ab["threshold"],
-            "training": training,
-        })
+        seeds.append(
+            {
+                "seed": seed,
+                "checkpoint": path,
+                "A_sei": float(twin.a_sei),
+                "log10_A_sei": math.log10(float(twin.a_sei)) if float(twin.a_sei) > 0 else None,
+                "log10_A_sei_init": recommended_log_a_sei() if init_assumed else training["log10_A_sei_init"],
+                "log10_A_sei_init_assumed": init_assumed,
+                "final_losses": training.get("final_losses") or {},
+                "train_mae_c": tr["mae_c"],
+                "train_rmse_c": tr["rmse_c"],
+                "held_out_mae_c": ho["mae_c"],
+                "held_out_rmse_c": ho["rmse_c"],
+                "per_battery_train_mae_c": tr["per_battery_mae_c"],
+                "per_battery_held_out_mae_c": ho["per_battery_mae_c"],
+                "per_ambient_train_mae_c": amb_tr,
+                "per_ambient_held_out_mae_c": amb_ho,
+                "verdict": ab["verdict"],
+                "criterion": ab.get("criterion", "unknown"),
+                "core_temp_max_c": ab["core_temp_max_c"],
+                "sei_min": ab["sei_min"],
+                "threshold": ab["threshold"],
+                "training": training,
+            }
+        )
     return {
         "name": name,
         "artifacts_dir": artifacts_dir,
@@ -221,17 +235,26 @@ def aggregate(run):
         out[akey] = {g: mean_std([s[akey][g] for s in seeds if g in s.get(akey, {})]) for g in groups}
     out["criterion_counts"] = {}
     for s in seeds:
-        out["criterion_counts"][s.get("criterion", "unknown")] = out["criterion_counts"].get(s.get("criterion", "unknown"), 0) + 1
+        out["criterion_counts"][s.get("criterion", "unknown")] = (
+            out["criterion_counts"].get(s.get("criterion", "unknown"), 0) + 1
+        )
     out["threshold"] = {k: v for k, v in zip(("mean", "std"), mean_std([s["threshold"] for s in seeds]))}
     thresholds = [s["threshold"] for s in seeds if s["threshold"] is not None]
-    out["threshold"].update({"min": min(thresholds) if thresholds else None, "max": max(thresholds) if thresholds else None})
+    out["threshold"].update(
+        {"min": min(thresholds) if thresholds else None, "max": max(thresholds) if thresholds else None}
+    )
     finals = [s["log10_A_sei"] for s in seeds if s.get("log10_A_sei") is not None]
     inits = [s.get("log10_A_sei_init") for s in seeds if s.get("log10_A_sei") is not None]
     fixed = [s.get("training", {}).get("physics", {}).get("fix_log_a_sei") for s in seeds]
     if seeds and all(f is not None for f in fixed):
-        out["identifiability"] = {"n_seeds": len(seeds), "status": "fixed (not trained)",
-                                  "reason": f"log10(A_sei) held at {fixed[0]:g} with --fix-log-a-sei",
-                                  "initial": None, "final": None, "shift": None}
+        out["identifiability"] = {
+            "n_seeds": len(seeds),
+            "status": "fixed (not trained)",
+            "reason": f"log10(A_sei) held at {fixed[0]:g} with --fix-log-a-sei",
+            "initial": None,
+            "final": None,
+            "shift": None,
+        }
     else:
         out["identifiability"] = assess_log_a_sei(finals, inits if any(i is not None for i in inits) else None)
     terms = {}
@@ -266,8 +289,17 @@ def option_decision(baseline, option, n_worst=2):
             status = "improved beyond spread" if delta < -spread else "not improved beyond spread"
         else:
             status = "unchanged within spread" if delta <= spread else "DEGRADED beyond spread"
-        rows.append({"battery": b, "worst": b in worst, "baseline": base[b][0], "option": opt[b][0],
-                     "delta": delta, "spread": spread, "status": status})
+        rows.append(
+            {
+                "battery": b,
+                "worst": b in worst,
+                "baseline": base[b][0],
+                "option": opt[b][0],
+                "delta": delta,
+                "spread": spread,
+                "status": status,
+            }
+        )
     worst_ok = all(r["status"] == "improved beyond spread" for r in rows if r["worst"])
     others_ok = not any(r["status"].startswith("DEGRADED") for r in rows)
     adopt = worst_ok and others_ok
@@ -275,23 +307,49 @@ def option_decision(baseline, option, n_worst=2):
         reason = f"lowers the worst batteries ({', '.join(worst)}) beyond the seed spread without degrading the others"
     elif not worst_ok:
         missed = [r["battery"] for r in rows if r["worst"] and r["status"] != "improved beyond spread"]
-        reason = f"does not lower {', '.join(missed)} beyond the seed spread" + ("" if others_ok else "; and degrades others")
+        reason = f"does not lower {', '.join(missed)} beyond the seed spread" + (
+            "" if others_ok else "; and degrades others"
+        )
     else:
         reason = "degrades " + ", ".join(r["battery"] for r in rows if r["status"].startswith("DEGRADED"))
-    return {"baseline": baseline["name"], "option": option["name"], "worst": worst, "rows": rows,
-            "adopt": adopt, "reason": reason}
+    return {
+        "baseline": baseline["name"],
+        "option": option["name"],
+        "worst": worst,
+        "rows": rows,
+        "adopt": adopt,
+        "reason": reason,
+    }
 
 
 def render_option_grid(baseline, options):
-    parts = ["## Physics options grid (opt-in; decision rule: adopt only if the worst held-out batteries improve "
-             "by more than the seed spread and no other battery degrades beyond its spread)", ""]
+    parts = [
+        "## Physics options grid (opt-in; decision rule: adopt only if the worst held-out batteries improve "
+        "by more than the seed spread and no other battery degrades beyond its spread)",
+        "",
+    ]
     for option in options:
         d = option_decision(baseline, option)
-        parts.append(f"### {option['name']} vs {baseline['name']}: **{'ADOPT' if d['adopt'] else 'REJECTED (negative result, left off)'}** -- {d['reason']}")
+        parts.append(
+            f"### {option['name']} vs {baseline['name']}: **{'ADOPT' if d['adopt'] else 'REJECTED (negative result, left off)'}** -- {d['reason']}"
+        )
         parts.append("")
-        parts.append(_table(["held-out battery", baseline["name"], option["name"], "delta", "seed spread", "status"],
-                            [[r["battery"] + (" (worst)" if r["worst"] else ""), fmt(r["baseline"]), fmt(r["option"]),
-                              f"{r['delta']:+.2f}", fmt(r["spread"]), r["status"]] for r in d["rows"]]))
+        parts.append(
+            _table(
+                ["held-out battery", baseline["name"], option["name"], "delta", "seed spread", "status"],
+                [
+                    [
+                        r["battery"] + (" (worst)" if r["worst"] else ""),
+                        fmt(r["baseline"]),
+                        fmt(r["option"]),
+                        f"{r['delta']:+.2f}",
+                        fmt(r["spread"]),
+                        r["status"],
+                    ]
+                    for r in d["rows"]
+                ],
+            )
+        )
         parts.append("")
     return parts
 
@@ -323,9 +381,13 @@ def _table(header, rows):
 
 
 COMPARE_METRICS = [
-    ("train_mae_c", "train MAE (°C)"), ("train_rmse_c", "train RMSE (°C)"),
-    ("held_out_mae_c", "held-out MAE (°C)"), ("held_out_rmse_c", "held-out RMSE (°C)"),
-    ("core_temp_max_c", CORE_T_LABEL), ("sei_min", "SEI min"), ("log10_A_sei", "log10 A_sei"),
+    ("train_mae_c", "train MAE (°C)"),
+    ("train_rmse_c", "train RMSE (°C)"),
+    ("held_out_mae_c", "held-out MAE (°C)"),
+    ("held_out_rmse_c", "held-out RMSE (°C)"),
+    ("core_temp_max_c", CORE_T_LABEL),
+    ("sei_min", "SEI min"),
+    ("log10_A_sei", "log10 A_sei"),
 ]
 
 
@@ -361,14 +423,25 @@ def compare_runs(run_a, run_b, seed=None):
 
 def render_comparison(cmp):
     head = [f"### {cmp['a']} vs {cmp['b']} ({cmp['basis']})", ""]
-    table = _table(["metric", cmp["a"], cmp["b"], f"delta ({cmp['b']} − {cmp['a']})"],
-                   [[label, fmt(va, 3 if "log10" in label or "SEI" in label else 2),
-                     fmt(vb, 3 if "log10" in label or "SEI" in label else 2),
-                     ("--" if d is None else f"{d:+.3f}" if ("log10" in label or "SEI" in label) else f"{d:+.2f}")]
-                    for label, va, vb, d in cmp["rows"]])
-    per = _table(["held-out battery", cmp["a"], cmp["b"], "delta"],
-                 [[b, fmt(va), fmt(vb), "--" if va is None or vb is None else f"{vb - va:+.2f}"]
-                  for b, va, vb in cmp["per_battery"]])
+    table = _table(
+        ["metric", cmp["a"], cmp["b"], f"delta ({cmp['b']} − {cmp['a']})"],
+        [
+            [
+                label,
+                fmt(va, 3 if "log10" in label or "SEI" in label else 2),
+                fmt(vb, 3 if "log10" in label or "SEI" in label else 2),
+                ("--" if d is None else f"{d:+.3f}" if ("log10" in label or "SEI" in label) else f"{d:+.2f}"),
+            ]
+            for label, va, vb, d in cmp["rows"]
+        ],
+    )
+    per = _table(
+        ["held-out battery", cmp["a"], cmp["b"], "delta"],
+        [
+            [b, fmt(va), fmt(vb), "--" if va is None or vb is None else f"{vb - va:+.2f}"]
+            for b, va, vb in cmp["per_battery"]
+        ],
+    )
     return "\n".join(head + [table, "", per, ""])
 
 
@@ -376,12 +449,15 @@ def render_reference(runs, aggregates, reference=DATABRICKS_V9):
     """The Databricks reference figures next to every local run, per held-out battery."""
     batteries = list(reference["per_battery_held_out_mae_c"]) + sorted(
         {b for r in runs for b in aggregates[r["name"]]["per_battery_held_out_mae_c"]}
-        - set(reference["per_battery_held_out_mae_c"]))
+        - set(reference["per_battery_held_out_mae_c"])
+    )
     header = ["held-out MAE (°C)", reference["label"]] + [r["name"] for r in runs]
-    rows = [["**overall**", fmt(reference["held_out_mae_c"])]
-            + [fmt_ms(aggregates[r["name"]]["metrics"]["held_out_mae_c"]) for r in runs],
-            ["train MAE (for reference)", fmt(reference["train_mae_c"])]
-            + [fmt_ms(aggregates[r["name"]]["metrics"]["train_mae_c"]) for r in runs]]
+    rows = [
+        ["**overall**", fmt(reference["held_out_mae_c"])]
+        + [fmt_ms(aggregates[r["name"]]["metrics"]["held_out_mae_c"]) for r in runs],
+        ["train MAE (for reference)", fmt(reference["train_mae_c"])]
+        + [fmt_ms(aggregates[r["name"]]["metrics"]["train_mae_c"]) for r in runs],
+    ]
     for b in batteries:
         ref = reference["per_battery_held_out_mae_c"].get(b)
         row = [b, fmt(ref) if ref is not None else "-- (absent in v9)"]
@@ -389,17 +465,23 @@ def render_reference(runs, aggregates, reference=DATABRICKS_V9):
             cell = aggregates[r["name"]]["per_battery_held_out_mae_c"].get(b)
             row.append(fmt_ms(cell) if cell else "-- (absent)")
         rows.append(row)
-    return ["## Databricks reference result (v9) vs local runs", "",
-            "The v9 notebook run is the only Databricks run with recorded accuracy figures. It used the legacy "
-            "1.4 Ah capacity floor (19 training / 5 held-out batteries -- B0056 had no data), every observation "
-            "point as anchor and the full 15000 + 2000 budget; the local runs below use the tables and protocols "
-            "described under Protocol, so the per-battery numbers are the like-for-like comparison and the overall "
-            "held-out mean is not (the local held-out set contains B0056).", "",
-            _table(header, rows), ""]
+    return [
+        "## Databricks reference result (v9) vs local runs",
+        "",
+        "The v9 notebook run is the only Databricks run with recorded accuracy figures. It used the legacy "
+        "1.4 Ah capacity floor (19 training / 5 held-out batteries -- B0056 had no data), every observation "
+        "point as anchor and the full 15000 + 2000 budget; the local runs below use the tables and protocols "
+        "described under Protocol, so the per-battery numbers are the like-for-like comparison and the overall "
+        "held-out mean is not (the local held-out set contains B0056).",
+        "",
+        _table(header, rows),
+        "",
+    ]
 
 
-def render_markdown(runs, title="Results", protocol=None, generated=None, notes=None, compare=(),
-                    grid=None, reference=True):
+def render_markdown(
+    runs, title="Results", protocol=None, generated=None, notes=None, compare=(), grid=None, reference=True
+):
     """The full RESULTS.md text for a list of collected runs.
 
     ``notes`` is appended verbatim; ``compare`` is a list of ``(name_a, name_b)`` pairs rendered as
@@ -409,34 +491,68 @@ def render_markdown(runs, title="Results", protocol=None, generated=None, notes=
     aggregates = {run["name"]: aggregate(run) for run in runs}
     by_name = {run["name"]: run for run in runs}
     generated = generated or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    parts = [f"# {title}", "",
-             f"Generated {generated} by `scripts/make_results_table.py`. Temperature errors are the "
-             "surface-temperature MAE / RMSE in °C against the measured values. " + VERDICT_NOTE, ""]
+    parts = [
+        f"# {title}",
+        "",
+        f"Generated {generated} by `scripts/make_results_table.py`. Temperature errors are the "
+        "surface-temperature MAE / RMSE in °C against the measured values. " + VERDICT_NOTE,
+        "",
+    ]
     if protocol:
         parts += ["## Protocol", "", protocol, ""]
 
-    parts += ["## Runs", "", _table(
-        ["run", "train batteries", "train cycles", "train rows", "held-out batteries",
-         "held-out cycles", "held-out rows", "seeds", "artifacts"],
-        [[r["name"], len(r["train"]["batteries"]), r["train"]["cycles"], r["train"]["rows"],
-          len(r["held_out"]["batteries"]), r["held_out"]["cycles"], r["held_out"]["rows"],
-          ", ".join(str(s["seed"]) for s in r["seeds"]), f"`{r['artifacts_dir']}`"] for r in runs]), ""]
+    parts += [
+        "## Runs",
+        "",
+        _table(
+            [
+                "run",
+                "train batteries",
+                "train cycles",
+                "train rows",
+                "held-out batteries",
+                "held-out cycles",
+                "held-out rows",
+                "seeds",
+                "artifacts",
+            ],
+            [
+                [
+                    r["name"],
+                    len(r["train"]["batteries"]),
+                    r["train"]["cycles"],
+                    r["train"]["rows"],
+                    len(r["held_out"]["batteries"]),
+                    r["held_out"]["cycles"],
+                    r["held_out"]["rows"],
+                    ", ".join(str(s["seed"]) for s in r["seeds"]),
+                    f"`{r['artifacts_dir']}`",
+                ]
+                for r in runs
+            ],
+        ),
+        "",
+    ]
     for r in runs:
         missing = sorted(set(config.HELD_OUT_BATTERIES) - set(r["held_out"]["batteries"]))
         if missing:
             parts.append(f"- **{r['name']}**: held-out table lacks designated batteries {missing}.")
         if r["train"]["cycles_dropped_on_load"] or r["held_out"]["cycles_dropped_on_load"]:
-            parts.append(f"- **{r['name']}**: {r['train']['cycles_dropped_on_load']} training and "
-                         f"{r['held_out']['cycles_dropped_on_load']} held-out cycles are dropped on load "
-                         "(missing Re or other required values).")
+            parts.append(
+                f"- **{r['name']}**: {r['train']['cycles_dropped_on_load']} training and "
+                f"{r['held_out']['cycles_dropped_on_load']} held-out cycles are dropped on load "
+                "(missing Re or other required values)."
+            )
     parts.append("")
 
     if reference:
         parts += render_reference(runs, aggregates)
 
     # Per-battery and per-ambient errors come first.
-    for table, heading in (("held_out", "Per-battery held-out MAE (°C, mean ± std over seeds)"),
-                           ("train", "Per-battery training MAE (°C, mean ± std over seeds)")):
+    for table, heading in (
+        ("held_out", "Per-battery held-out MAE (°C, mean ± std over seeds)"),
+        ("train", "Per-battery training MAE (°C, mean ± std over seeds)"),
+    ):
         key = f"per_battery_{table}_mae_c"
         batteries = sorted({b for r in runs for b in aggregates[r["name"]][key]})
         rows = []
@@ -447,77 +563,208 @@ def render_markdown(runs, title="Results", protocol=None, generated=None, notes=
                 row.append(fmt_ms(cell) if cell else "-- (absent)")
             rows.append(row)
         parts += [f"## {heading}", "", _table(["battery"] + [r["name"] for r in runs], rows), ""]
-    for table, heading in (("held_out", "Per-ambient held-out MAE (°C, mean ± std over seeds)"),
-                           ("train", "Per-ambient training MAE (°C, mean ± std over seeds)")):
+    for table, heading in (
+        ("held_out", "Per-ambient held-out MAE (°C, mean ± std over seeds)"),
+        ("train", "Per-ambient training MAE (°C, mean ± std over seeds)"),
+    ):
         key = f"per_ambient_{table}_mae_c"
-        groups = sorted({g for r in runs for g in aggregates[r["name"]].get(key, {})}, key=lambda g: float(g.split()[0]))
+        groups = sorted(
+            {g for r in runs for g in aggregates[r["name"]].get(key, {})}, key=lambda g: float(g.split()[0])
+        )
         if groups:
-            rows = [[g] + [fmt_ms(aggregates[r["name"]][key][g]) if g in aggregates[r["name"]].get(key, {}) else "--"
-                           for r in runs] for g in groups]
+            rows = [
+                [g]
+                + [
+                    fmt_ms(aggregates[r["name"]][key][g]) if g in aggregates[r["name"]].get(key, {}) else "--"
+                    for r in runs
+                ]
+                for g in groups
+            ]
             parts += [f"## {heading}", "", _table(["ambient"] + [r["name"] for r in runs], rows), ""]
 
-    parts += ["## Summary across seeds (mean ± std)", "", _table(
-        ["run", "seeds", "log10 A_sei", "train MAE (°C)", "train RMSE (°C)", "held-out MAE (°C)",
-         "held-out RMSE (°C)", "gap (held-out − train)", CORE_T_LABEL, "SEI min", "verdicts (ambient ≤ 45 °C only)"],
-        [[r["name"], a["n_seeds"], fmt_ms(a["metrics"]["log10_A_sei"]),
-          fmt_ms(a["metrics"]["train_mae_c"]), fmt_ms(a["metrics"]["train_rmse_c"]),
-          fmt_ms(a["metrics"]["held_out_mae_c"]), fmt_ms(a["metrics"]["held_out_rmse_c"]),
-          fmt_ms(a["metrics"]["generalisation_gap_c"]), fmt_ms(a["metrics"]["core_temp_max_c"], 1),
-          fmt_ms(a["metrics"]["sei_min"], 3),
-          " / ".join(f"{a['verdicts'][v]} {v}" for v in VERDICTS if a["verdicts"][v])
-          + ("" if a["verdict_consistent"] else " **(inconsistent)**")]
-         for r in runs for a in [aggregates[r["name"]]]]), ""]
+    parts += [
+        "## Summary across seeds (mean ± std)",
+        "",
+        _table(
+            [
+                "run",
+                "seeds",
+                "log10 A_sei",
+                "train MAE (°C)",
+                "train RMSE (°C)",
+                "held-out MAE (°C)",
+                "held-out RMSE (°C)",
+                "gap (held-out − train)",
+                CORE_T_LABEL,
+                "SEI min",
+                "verdicts (ambient ≤ 45 °C only)",
+            ],
+            [
+                [
+                    r["name"],
+                    a["n_seeds"],
+                    fmt_ms(a["metrics"]["log10_A_sei"]),
+                    fmt_ms(a["metrics"]["train_mae_c"]),
+                    fmt_ms(a["metrics"]["train_rmse_c"]),
+                    fmt_ms(a["metrics"]["held_out_mae_c"]),
+                    fmt_ms(a["metrics"]["held_out_rmse_c"]),
+                    fmt_ms(a["metrics"]["generalisation_gap_c"]),
+                    fmt_ms(a["metrics"]["core_temp_max_c"], 1),
+                    fmt_ms(a["metrics"]["sei_min"], 3),
+                    " / ".join(f"{a['verdicts'][v]} {v}" for v in VERDICTS if a["verdicts"][v])
+                    + ("" if a["verdict_consistent"] else " **(inconsistent)**"),
+                ]
+                for r in runs
+                for a in [aggregates[r["name"]]]
+            ],
+        ),
+        "",
+    ]
 
-    parts += ["## Per-seed checkpoint metrics", "", _table(
-        ["run", "seed", "A_sei", "train MAE", "train RMSE", "held-out MAE", "held-out RMSE",
-         CORE_T_LABEL, "SEI min", "threshold", "verdict", "decided by"],
-        [[r["name"], s["seed"], fmt_sci(s["A_sei"]), fmt(s["train_mae_c"]), fmt(s["train_rmse_c"]),
-          fmt(s["held_out_mae_c"]), fmt(s["held_out_rmse_c"]), fmt(s["core_temp_max_c"], 1),
-          fmt(s["sei_min"], 3), fmt(s["threshold"], 3), s["verdict"], s.get("criterion", "--")]
-         for r in runs for s in r["seeds"]]), ""]
+    parts += [
+        "## Per-seed checkpoint metrics",
+        "",
+        _table(
+            [
+                "run",
+                "seed",
+                "A_sei",
+                "train MAE",
+                "train RMSE",
+                "held-out MAE",
+                "held-out RMSE",
+                CORE_T_LABEL,
+                "SEI min",
+                "threshold",
+                "verdict",
+                "decided by",
+            ],
+            [
+                [
+                    r["name"],
+                    s["seed"],
+                    fmt_sci(s["A_sei"]),
+                    fmt(s["train_mae_c"]),
+                    fmt(s["train_rmse_c"]),
+                    fmt(s["held_out_mae_c"]),
+                    fmt(s["held_out_rmse_c"]),
+                    fmt(s["core_temp_max_c"], 1),
+                    fmt(s["sei_min"], 3),
+                    fmt(s["threshold"], 3),
+                    s["verdict"],
+                    s.get("criterion", "--"),
+                ]
+                for r in runs
+                for s in r["seeds"]
+            ],
+        ),
+        "",
+    ]
 
-    parts += ["## A_sei identifiability across seeds", "", _table(
-        ["run", "seeds", "initial log10 A_sei (min..max)", "final log10 A_sei (mean ± std)", "final range",
-         "status", "reason"],
-        [[r["name"], a["n_seeds"],
-          "--" if not a["initial"] else f"{a['initial']['min']:.2f}..{a['initial']['max']:.2f}",
-          "--" if not a["final"] else f"{a['final']['mean']:.2f} ± {a['final']['std']:.2f}",
-          "--" if not a["final"] else f"{a['final']['range']:.2f}",
-          f"**{a['status']}**", a["reason"]
-          + (" (initial value not recorded; assumed the recommended default)"
-             if any(s.get("log10_A_sei_init_assumed") for s in r["seeds"]) else "")]
-         for r in runs for a in [aggregates[r["name"]]["identifiability"]]]), "",
+    parts += [
+        "## A_sei identifiability across seeds",
+        "",
+        _table(
+            [
+                "run",
+                "seeds",
+                "initial log10 A_sei (min..max)",
+                "final log10 A_sei (mean ± std)",
+                "final range",
+                "status",
+                "reason",
+            ],
+            [
+                [
+                    r["name"],
+                    a["n_seeds"],
+                    "--" if not a["initial"] else f"{a['initial']['min']:.2f}..{a['initial']['max']:.2f}",
+                    "--" if not a["final"] else f"{a['final']['mean']:.2f} ± {a['final']['std']:.2f}",
+                    "--" if not a["final"] else f"{a['final']['range']:.2f}",
+                    f"**{a['status']}**",
+                    a["reason"]
+                    + (
+                        " (initial value not recorded; assumed the recommended default)"
+                        if any(s.get("log10_A_sei_init_assumed") for s in r["seeds"])
+                        else ""
+                    ),
+                ]
+                for r in runs
+                for a in [aggregates[r["name"]]["identifiability"]]
+            ],
+        ),
+        "",
         f"Thresholds: seeds must end within {config.IDENTIFIABLE_MAX_SPREAD_DECADES} decades of each other and "
         f"have moved at least {config.IDENTIFIABLE_MIN_MOVEMENT_DECADES} decades from their start; only seeds "
         "that *started* apart (`train --a-sei-init-spread`) can show identifiability rather than consistency. "
-        "Runs trained with `--fix-log-a-sei` hold A_sei constant by construction.", ""]
+        "Runs trained with `--fix-log-a-sei` hold A_sei constant by construction.",
+        "",
+    ]
 
     term_runs = [r for r in runs if aggregates[r["name"]]["loss_terms"]]
     if term_runs:
         names = config.LOSS_TERM_NAMES
-        parts += ["## Final weighted loss terms (mean over seeds; share of total in brackets)", "", _table(
-            ["run"] + names + ["dominant"],
-            [[r["name"]] + [
-                (f"{aggregates[r['name']]['loss_terms'][n][0]:.2e} ({100 * aggregates[r['name']]['loss_shares'][n]:.0f}%)"
-                 if n in aggregates[r["name"]]["loss_terms"] else "--") for n in names]
-             + [aggregates[r["name"]]["dominant_term"]] for r in term_runs]), "",
-            "Weights " + ", ".join(f"{n}={w}" for n, w in zip(names, config.LOSS_WEIGHTS))
-            + "; per-step histories are in each run's `loss_history_seed*.csv`.", ""]
+        parts += [
+            "## Final weighted loss terms (mean over seeds; share of total in brackets)",
+            "",
+            _table(
+                ["run"] + names + ["dominant"],
+                [
+                    [r["name"]]
+                    + [
+                        (
+                            f"{aggregates[r['name']]['loss_terms'][n][0]:.2e} ({100 * aggregates[r['name']]['loss_shares'][n]:.0f}%)"
+                            if n in aggregates[r["name"]]["loss_terms"]
+                            else "--"
+                        )
+                        for n in names
+                    ]
+                    + [aggregates[r["name"]]["dominant_term"]]
+                    for r in term_runs
+                ],
+            ),
+            "",
+            "Weights "
+            + ", ".join(f"{n}={w}" for n, w in zip(names, config.LOSS_WEIGHTS))
+            + "; per-step histories are in each run's `loss_history_seed*.csv`.",
+            "",
+        ]
 
     if grid:
         baseline_name, option_names = grid
         parts += render_option_grid(by_name[baseline_name], [by_name[n] for n in option_names])
 
-    parts += ["## Abuse-test verdict spread (ensemble per run)", "", VERDICT_NOTE, "", _table(
-        ["run", "models"] + list(VERDICTS) + ["consistent", "decided by (count x criterion)",
-                                               "SEI threshold min..max (mean ± std)", CORE_T_LABEL + " min..max"],
-        [[r["name"], a["n_seeds"]] + [a["verdicts"][v] for v in VERDICTS]
-         + ["yes" if a["verdict_consistent"] else "**no**",
-            ", ".join(f"{n} x {k}" for k, n in a["criterion_counts"].items()),
-            "--" if a["threshold"]["min"] is None else
-            f"{a['threshold']['min']:.3f}..{a['threshold']['max']:.3f} ({a['threshold']['mean']:.3f} ± {a['threshold']['std']:.3f})",
-            f"{min(s['core_temp_max_c'] for s in r['seeds']):.1f}..{max(s['core_temp_max_c'] for s in r['seeds']):.1f}"]
-         for r in runs for a in [aggregates[r["name"]]]]), ""]
+    parts += [
+        "## Abuse-test verdict spread (ensemble per run)",
+        "",
+        VERDICT_NOTE,
+        "",
+        _table(
+            ["run", "models"]
+            + list(VERDICTS)
+            + [
+                "consistent",
+                "decided by (count x criterion)",
+                "SEI threshold min..max (mean ± std)",
+                CORE_T_LABEL + " min..max",
+            ],
+            [
+                [r["name"], a["n_seeds"]]
+                + [a["verdicts"][v] for v in VERDICTS]
+                + [
+                    "yes" if a["verdict_consistent"] else "**no**",
+                    ", ".join(f"{n} x {k}" for k, n in a["criterion_counts"].items()),
+                    "--"
+                    if a["threshold"]["min"] is None
+                    else f"{a['threshold']['min']:.3f}..{a['threshold']['max']:.3f} ({a['threshold']['mean']:.3f} ± {a['threshold']['std']:.3f})",
+                    f"{min(s['core_temp_max_c'] for s in r['seeds']):.1f}..{max(s['core_temp_max_c'] for s in r['seeds']):.1f}",
+                ]
+                for r in runs
+                for a in [aggregates[r["name"]]]
+            ],
+        ),
+        "",
+    ]
     if compare:
         parts += ["## Run-to-run comparisons", ""]
         for name_a, name_b in compare:
@@ -534,21 +781,39 @@ def render_markdown(runs, title="Results", protocol=None, generated=None, notes=
 # ----------------------------------------------------------------------------------------
 def build_parser():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--run", nargs=3, action="append", metavar=("NAME", "ARTIFACTS_DIR", "DATA_DIR"),
-                   required=True, help="a run to include; repeatable")
+    p.add_argument(
+        "--run",
+        nargs=3,
+        action="append",
+        metavar=("NAME", "ARTIFACTS_DIR", "DATA_DIR"),
+        required=True,
+        help="a run to include; repeatable",
+    )
     p.add_argument("--out", default=os.path.join(_REPO_ROOT, "docs", "RESULTS.md"))
     p.add_argument("--json", default=None, help="also dump the collected metrics as JSON")
     p.add_argument("--title", default="Baseline results on the NASA battery data set")
     p.add_argument("--protocol", default=None, help="free text describing the training protocol")
     p.add_argument("--protocol-file", default=None, help="file whose contents describe the protocol")
-    p.add_argument("--notes-file", default=None,
-                   help="Markdown appended as a 'Notes' section (interpretation of the numbers)")
-    p.add_argument("--grid", nargs="+", default=None, metavar="RUN",
-                   help="physics-option decision tables: the first run is the baseline, the rest are options")
+    p.add_argument(
+        "--notes-file", default=None, help="Markdown appended as a 'Notes' section (interpretation of the numbers)"
+    )
+    p.add_argument(
+        "--grid",
+        nargs="+",
+        default=None,
+        metavar="RUN",
+        help="physics-option decision tables: the first run is the baseline, the rest are options",
+    )
     p.add_argument("--no-reference", action="store_true", help="omit the Databricks v9 reference section")
-    p.add_argument("--compare", nargs=2, action="append", default=[], metavar=("RUN_A", "RUN_B"),
-                   help="render a metric-by-metric delta table for two runs (same seed if they share exactly "
-                        "one, else means); repeatable")
+    p.add_argument(
+        "--compare",
+        nargs=2,
+        action="append",
+        default=[],
+        metavar=("RUN_A", "RUN_B"),
+        help="render a metric-by-metric delta table for two runs (same seed if they share exactly "
+        "one, else means); repeatable",
+    )
     return p
 
 
@@ -562,11 +827,19 @@ def main(argv=None, twin_factory=None, log=print):
     if args.notes_file:
         with open(args.notes_file, encoding="utf-8") as f:
             notes = f.read()
-    runs = [collect_run(name, artifacts, data, twin_factory=twin_factory, log=log)
-            for name, artifacts, data in args.run]
+    runs = [
+        collect_run(name, artifacts, data, twin_factory=twin_factory, log=log) for name, artifacts, data in args.run
+    ]
     grid = (args.grid[0], args.grid[1:]) if args.grid else None
-    text = render_markdown(runs, title=args.title, protocol=protocol, notes=notes, compare=args.compare,
-                           grid=grid, reference=not args.no_reference)
+    text = render_markdown(
+        runs,
+        title=args.title,
+        protocol=protocol,
+        notes=notes,
+        compare=args.compare,
+        grid=grid,
+        reference=not args.no_reference,
+    )
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(text + "\n")

@@ -330,6 +330,19 @@ Python 3.12 (plus Python 3.10 on Ubuntu), installing CPU-only PyTorch, and once 
 without PyTorch/DeepXDE to keep the skip path working. The test session pins PyTorch's default
 device to the CPU so results do not depend on the runner's GPU.
 
+### Coverage
+
+```bash
+python -m pytest --cov=battery_pinn -q
+```
+
+Measured on 2026-10-31 with PyTorch and DeepXDE installed (190 tests, statement coverage, no
+branch coverage): **92 % overall** (1145 statements, 95 missed). The seven core modules
+(`config`, `data`, `etl`, `nasa_mat`, `interpolation`, `ocv`, `physics`) are at 96-100 %; the
+lowest are `cli.py` (69 %) and `inference.py` (78 %), whose remaining lines are mostly the
+training and evaluation entry points that the test suite deliberately does not run in full.
+Without PyTorch the torch-dependent tests are skipped and the figure is lower.
+
 ## Layout
 
 ```

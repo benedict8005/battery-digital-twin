@@ -7,9 +7,11 @@ from battery_pinn.interpolation import torch_interp
 
 
 def _interp(x, xp, fp):
-    out = torch_interp(torch.tensor(x, dtype=torch.float32),
-                       torch.tensor(xp, dtype=torch.float32),
-                       torch.tensor(fp, dtype=torch.float32))
+    out = torch_interp(
+        torch.tensor(x, dtype=torch.float32),
+        torch.tensor(xp, dtype=torch.float32),
+        torch.tensor(fp, dtype=torch.float32),
+    )
     return out.numpy().flatten()
 
 
@@ -124,12 +126,14 @@ def test_discharge_profile_with_pooled_near_duplicate_times_stays_finite():
 
     t = np.linspace(0.0, 1.0, 50)
     pooled = np.sort(np.concatenate([t, [_ulp_above(v) for v in t[1:]]]))
-    df_agg = pd.DataFrame({
-        "Time_normalized": pooled,
-        "Current_measured": -2.0 + 0.01 * np.sin(20 * pooled),
-        "Voltage_measured": 4.0 - pooled + 0.01 * np.cos(20 * pooled),
-        "SoC": 100 * (1 - pooled),
-    })
+    df_agg = pd.DataFrame(
+        {
+            "Time_normalized": pooled,
+            "Current_measured": -2.0 + 0.01 * np.sin(20 * pooled),
+            "Voltage_measured": 4.0 - pooled + 0.01 * np.cos(20 * pooled),
+            "SoC": 100 * (1 - pooled),
+        }
+    )
     profile = DischargeProfile(df_agg, device="cpu")
     current, voltage, soc = profile.at(torch.tensor([[0.0], [1e-9], [0.5], [1.0]]))
     for out in (current, voltage, soc):

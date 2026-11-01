@@ -1,4 +1,5 @@
 """A_sei identifiability assessment across an ensemble of seeds (pure Python)."""
+
 import pytest
 
 from battery_pinn import config
@@ -43,7 +44,7 @@ def test_agreement_from_a_common_start_is_only_consistency():
 
 def test_thresholds_come_from_config_and_can_be_overridden():
     finals, inits = [22.0, 22.4], [21.0, 23.0]
-    assert assess_log_a_sei(finals, inits)["status"] == "identifiable"   # 0.4 < 0.5 default
+    assert assess_log_a_sei(finals, inits)["status"] == "identifiable"  # 0.4 < 0.5 default
     assert assess_log_a_sei(finals, inits, max_spread=0.3)["status"] == "not identifiable"
     assert assess_log_a_sei([22.0, 22.0], [22.0, 22.05], min_movement=0.1)["status"] == "not identifiable"
     assert config.IDENTIFIABLE_MAX_SPREAD_DECADES == 0.5 and config.IDENTIFIABLE_MIN_MOVEMENT_DECADES == 0.1

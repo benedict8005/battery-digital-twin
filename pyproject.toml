@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "pandas-stubs", "scipy-stubs"]
 
 [project.scripts]
 battery-pinn = "battery_pinn.cli:main"
@@ -30,3 +30,41 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["test"]
 pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+src = ["src", "test"]
+
+[tool.ruff.lint]
+# Permissive start (task #3): pyflakes, pycodestyle and import order only.
+select = ["E", "F", "W", "I"]
+# E501 is left to `ruff format` (added in a later step of task #3).
+ignore = ["E501"]
+# `I` is the symbol for current in the physics code.
+per-file-ignores = { "src/battery_pinn/physics.py" = ["E741"], "test/*" = ["E402", "E741"] }
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+
+# Modules already clean under --strict; extend this list as each module is typed.
+[[tool.mypy.overrides]]
+module = ["battery_pinn.config", "battery_pinn.ocv", "battery_pinn.interpolation", "battery_pinn.device", "battery_pinn.data", "battery_pinn.nasa_mat", "battery_pinn.etl", "battery_pinn.physics"]
+disallow_untyped_defs = true
+disallow_untyped_calls = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_any_generics = false
+warn_return_any = true
+no_implicit_reexport = true
+
+[tool.coverage.run]
+source = ["battery_pinn"]
+branch = false
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true

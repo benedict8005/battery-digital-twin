@@ -4,6 +4,7 @@ This is NOT real battery data. It reproduces the schema (and rough magnitudes) o
 processed table so the pipeline can run end to end without the NASA files. Results from it
 say nothing about real cells.
 """
+
 import numpy as np
 import pandas as pd
 
@@ -14,7 +15,7 @@ DISCHARGE_CURRENT_A = -2.0
 
 def _ocv(soc_frac):
     s = np.clip(soc_frac, 0.0, 1.0)
-    return 3.0 + 1.2 * s - 0.25 * np.exp(-20.0 * s) + 0.1 * s ** 4
+    return 3.0 + 1.2 * s - 0.25 * np.exp(-20.0 * s) + 0.1 * s**4
 
 
 def generate_cells(n_batteries=8, cycles_per_battery=12, seed=0, noise_c=0.2):
@@ -38,21 +39,25 @@ def generate_cells(n_batteries=8, cycles_per_battery=12, seed=0, noise_c=0.2):
             volt = _ocv(soc / 100.0) - abs(DISCHARGE_CURRENT_A) * re * 4.0
             heat = (3.0 + 40.0 * re) * (1.0 - np.exp(-3.0 * tn))
             temp = ambient + heat + rng.normal(0.0, noise_c, size=t.shape)
-            rows.append(pd.DataFrame({
-                "bin": np.arange(BINS_PER_CYCLE),
-                "Time": t,
-                "Voltage_measured": volt,
-                "Current_measured": DISCHARGE_CURRENT_A,
-                "Temperature_measured": temp,
-                "SoC": soc,
-                "battery_id": battery_id,
-                "cycle_number": cyc + 1,
-                "SoH": soh,
-                "Re": re,
-                "Rct": re * 2.0,
-                "ambient_temperature": ambient,
-                "Time_normalized": tn,
-            }))
+            rows.append(
+                pd.DataFrame(
+                    {
+                        "bin": np.arange(BINS_PER_CYCLE),
+                        "Time": t,
+                        "Voltage_measured": volt,
+                        "Current_measured": DISCHARGE_CURRENT_A,
+                        "Temperature_measured": temp,
+                        "SoC": soc,
+                        "battery_id": battery_id,
+                        "cycle_number": cyc + 1,
+                        "SoH": soh,
+                        "Re": re,
+                        "Rct": re * 2.0,
+                        "ambient_temperature": ambient,
+                        "Time_normalized": tn,
+                    }
+                )
+            )
     return pd.concat(rows, ignore_index=True)[PROCESSED_COLUMNS]
 
 

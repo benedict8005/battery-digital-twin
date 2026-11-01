@@ -1,4 +1,5 @@
 """``--device`` resolution: auto-selection with a safe fallback to CPU."""
+
 import pytest
 
 torch = pytest.importorskip("torch")

@@ -78,10 +78,10 @@ def test_ensemble_summary_counts_verdicts_criteria_and_threshold_spread(train_df
     from battery_pinn.inference import format_ensemble_summary, summarise_ensemble
 
     results = {
-        "seed0": abuse_test(StubTwin(t_delta=0.0, c=1.0), train_df),   # SAFE
-        "seed1": abuse_test(StubTwin(t_delta=0.4, c=1.0), train_df),   # WARNING (core T: 20 + 45 = 65 C)
-        "seed2": abuse_test(StubTwin(t_delta=1.2, c=1.0), train_df),   # DANGER (core T)
-        "seed3": abuse_test(StubTwin(t_delta=0.0, c=0.0), train_df),   # DANGER (SEI)
+        "seed0": abuse_test(StubTwin(t_delta=0.0, c=1.0), train_df),  # SAFE
+        "seed1": abuse_test(StubTwin(t_delta=0.4, c=1.0), train_df),  # WARNING (core T: 20 + 45 = 65 C)
+        "seed2": abuse_test(StubTwin(t_delta=1.2, c=1.0), train_df),  # DANGER (core T)
+        "seed3": abuse_test(StubTwin(t_delta=0.0, c=0.0), train_df),  # DANGER (SEI)
     }
     s = summarise_ensemble(results)
     assert s["n"] == 4 and s["verdict_counts"] == {"DANGER": 2, "WARNING": 1, "SAFE": 1}
