@@ -48,9 +48,7 @@ def solve_heat(
     if n_x < 3 or n_t < 1:
         raise ValueError("need n_x >= 3 and n_t >= 1")
     if t_end <= 0 or k_cond < 0 or thermal_mass <= 0 or newton_coeff < 0:
-        raise ValueError(
-            "t_end and thermal_mass must be positive; k_cond and newton_coeff >= 0"
-        )
+        raise ValueError("t_end and thermal_mass must be positive; k_cond and newton_coeff >= 0")
 
     q = source if callable(source) else (lambda _t, _v=float(source): _v)
     x = np.linspace(0.0, 1.0, n_x)
@@ -72,9 +70,7 @@ def solve_heat(
         system[-1, :] = 0.0
         system[0, 0] = system[-1, -1] = 1.0
 
-    temp = np.full(
-        (n_t + 1, n_x), float(ambient_c if t_initial_c is None else t_initial_c)
-    )
+    temp = np.full((n_t + 1, n_x), float(ambient_c if t_initial_c is None else t_initial_c))
     for n in range(n_t):
         rhs = thermal_mass / dt * temp[n] + q(t[n + 1]) + newton_coeff * ambient_c
         if boundary == "dirichlet":
