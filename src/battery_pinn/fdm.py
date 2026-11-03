@@ -14,13 +14,14 @@ Time stepping is backward Euler, so it is unconditionally stable. No PyTorch is 
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TypeAlias
 
 import numpy as np
 from numpy.typing import NDArray
 
 from battery_pinn import config
 
-FloatArray = NDArray[np.float64]
+FloatArray: TypeAlias = NDArray[np.float64]
 Source = float | Callable[[float], float]
 
 
