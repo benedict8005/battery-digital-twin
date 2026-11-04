@@ -73,3 +73,26 @@ def test_time_dependent_source_callable():
 def test_bad_arguments_raise(kwargs):
     with pytest.raises(ValueError):
         solve_heat(10.0, 25.0, **kwargs)
+
+
+def test_joule_source_is_current_squared_times_resistance():
+    from battery_pinn.fdm import joule_source
+
+    assert joule_source(3.0, 0.5) == pytest.approx(4.5)
+    assert joule_source(-3.0, 0.5) == pytest.approx(4.5)
+
+
+def test_simulate_command_prints_uniform_heating_profile(capsys):
+    import time
+
+    from battery_pinn import config
+    from battery_pinn.cli import main
+
+    start = time.perf_counter()
+    main(["simulate", "--current", "10", "--resistance", "2", "--ambient", "25", "--duration", "100"])
+    assert time.perf_counter() - start < 1.0
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if not ln.startswith("#")]
+    temps = [float(ln.split()[1]) for ln in lines]
+    assert len(temps) == 11
+    expected = 25.0 + 200.0 * 100.0 / (config.RHO * config.CP)  # insulated: uniform ramp
+    assert temps == pytest.approx([expected] * 11, abs=1e-3)

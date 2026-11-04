@@ -25,6 +25,11 @@ FloatArray: TypeAlias = NDArray[np.float64]
 Source = float | Callable[[float], float]
 
 
+def joule_source(current: float, resistance: float) -> float:
+    """Constant Joule heat ``I * (V - U_ocv) = I**2 * R`` as used by the PDE (W/m3)."""
+    return float(current) ** 2 * float(resistance)
+
+
 def solve_heat(
     t_end: float,
     ambient_c: float,

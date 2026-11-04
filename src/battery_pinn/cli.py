@@ -1,4 +1,4 @@
-"""Command-line interface: convert-mat, prepare-data, generate-data, train, evaluate, abuse-test, demo."""
+"""Command-line interface: convert-mat, prepare-data, generate-data, train, evaluate, abuse-test, simulate, demo."""
 
 import argparse
 import glob
@@ -162,6 +162,25 @@ def _cmd_abuse(args):
     plot_path = os.path.join(args.checkpoints, "abuse_test.png")
     plot_abuse_test(results, plot_path)
     print(f"Saved plot to {plot_path} and abuse_test_summary.json")
+
+
+def _cmd_simulate(args):
+    from battery_pinn.fdm import joule_source, solve_heat
+
+    source = joule_source(args.current, args.resistance)
+    x, t, temp = solve_heat(
+        args.duration,
+        args.ambient,
+        source,
+        n_x=args.n_x,
+        n_t=args.n_t,
+        newton_coeff=config.NEWTON_COOLING_COEFF if args.newton_cooling else 0.0,
+        boundary=args.boundary,
+    )
+    print(f"# heat source {source:.6g} W/m3, ambient {args.ambient:g} C, {args.duration:g} s")
+    print("# x (normalised), temperature (C) at the final time")
+    for xi, ti in zip(x, temp[-1]):
+        print(f"{xi:.4f}  {ti:.4f}")
 
 
 def _cmd_demo(args):
@@ -388,6 +407,20 @@ def build_parser():
         f"{config.ABUSE_ENSEMBLE_SIZE} seeds)",
     )
     a.set_defaults(func=_cmd_abuse)
+
+    sm = sub.add_parser(
+        "simulate",
+        help="print the final temperature profile from the finite-difference heat solver (no PyTorch)",
+    )
+    sm.add_argument("--current", type=float, default=2.0, help="cell current in A (Joule heat = I^2 * R)")
+    sm.add_argument("--resistance", type=float, default=0.1, help="resistance R in the Joule term (same units as Re)")
+    sm.add_argument("--ambient", type=float, default=25.0, help="ambient temperature in C")
+    sm.add_argument("--duration", type=float, default=600.0, help="simulated time in seconds")
+    sm.add_argument("--n-x", type=int, default=11, help="number of space grid points")
+    sm.add_argument("--n-t", type=int, default=200, help="number of time steps")
+    sm.add_argument("--boundary", choices=("neumann", "dirichlet"), default="neumann")
+    sm.add_argument("--newton-cooling", action="store_true", help="add the Newton surface-cooling sink")
+    sm.set_defaults(func=_cmd_simulate)
 
     d = sub.add_parser("demo", help="generate data, train briefly, evaluate, abuse-test")
     d.add_argument("--workdir", default=".")
