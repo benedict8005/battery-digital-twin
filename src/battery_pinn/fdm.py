@@ -30,7 +30,7 @@ def joule_source(current: float, resistance: float) -> float:
     return float(current) ** 2 * float(resistance)
 
 
-def solve_heat(
+def _march(
     t_end: float,
     ambient_c: float,
     source: Source = 0.0,
@@ -42,17 +42,18 @@ def solve_heat(
     newton_coeff: float = 0.0,
     t_initial_c: float | None = None,
     boundary: str = "neumann",
-) -> tuple[FloatArray, FloatArray, FloatArray]:
-    """Integrate the heat equation from ``t=0`` to ``t_end`` seconds.
-
-    ``source`` is a constant or a function of time in seconds (W/m3). The initial temperature
-    defaults to ``ambient_c``. Returns ``(x, t, T)`` with ``T`` of shape ``(n_t + 1, n_x)`` in
-    degrees Celsius.
-    """
+    a_sei: float = 0.0,
+    c_initial: float = 1.0,
+    ea_sei: float = config.EA_SEI,
+    h_sei: float = config.H_SEI,
+) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
+    """Shared time-marching loop; returns ``(x, t, T, c)``."""
     if boundary not in ("neumann", "dirichlet"):
         raise ValueError(f"boundary must be 'neumann' or 'dirichlet', got {boundary!r}")
     if n_x < 3 or n_t < 1:
         raise ValueError("need n_x >= 3 and n_t >= 1")
+    if a_sei < 0 or not 0.0 <= c_initial <= 1.0:
+        raise ValueError("a_sei must be >= 0 and c_initial in [0, 1]")
     if t_end <= 0 or k_cond < 0 or thermal_mass <= 0 or newton_coeff < 0:
         raise ValueError("t_end and thermal_mass must be positive; k_cond and newton_coeff >= 0")
 
@@ -77,9 +78,77 @@ def solve_heat(
         system[0, 0] = system[-1, -1] = 1.0
 
     temp = np.full((n_t + 1, n_x), float(ambient_c if t_initial_c is None else t_initial_c))
+    stab = np.full((n_t + 1, n_x), float(c_initial))
     for n in range(n_t):
-        rhs = thermal_mass / dt * temp[n] + q(t[n + 1]) + newton_coeff * ambient_c
+        # SEI terms are lagged one step (explicit): rate = A c exp(-Ea / (R T)), dc/dt = -rate.
+        t_kelvin = np.clip(temp[n] + 273.15, 273.15, 600.0)
+        rate = a_sei * stab[n] * np.exp(-ea_sei / (config.R_GAS * t_kelvin))
+        stab[n + 1] = np.clip(stab[n] - dt * rate, 0.0, 1.0)
+        rhs = thermal_mass / dt * temp[n] + q(t[n + 1]) + h_sei * rate + newton_coeff * ambient_c
         if boundary == "dirichlet":
             rhs[0] = rhs[-1] = ambient_c
         temp[n + 1] = np.linalg.solve(system, rhs)
+    return x, t, temp, stab
+
+
+def solve_heat(
+    t_end: float,
+    ambient_c: float,
+    source: Source = 0.0,
+    *,
+    n_x: int = 21,
+    n_t: int = 200,
+    k_cond: float = config.K_COND,
+    thermal_mass: float = config.RHO * config.CP,
+    newton_coeff: float = 0.0,
+    t_initial_c: float | None = None,
+    boundary: str = "neumann",
+) -> tuple[FloatArray, FloatArray, FloatArray]:
+    """Integrate the heat equation from ``t=0`` to ``t_end`` seconds.
+
+    ``source`` is a constant or a function of time in seconds (W/m3). The initial temperature
+    defaults to ``ambient_c``. Returns ``(x, t, T)`` with ``T`` of shape ``(n_t + 1, n_x)`` in
+    degrees Celsius.
+    """
+    x, t, temp, _ = _march(
+        t_end,
+        ambient_c,
+        source,
+        n_x=n_x,
+        n_t=n_t,
+        k_cond=k_cond,
+        thermal_mass=thermal_mass,
+        newton_coeff=newton_coeff,
+        t_initial_c=t_initial_c,
+        boundary=boundary,
+    )
     return x, t, temp
+
+
+def solve_heat_sei(
+    t_end: float,
+    ambient_c: float,
+    a_sei: float,
+    source: Source = 0.0,
+    *,
+    c_initial: float = 1.0,
+    ea_sei: float = config.EA_SEI,
+    h_sei: float = config.H_SEI,
+    **kwargs: float | str | None,
+) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
+    """Heat equation coupled to SEI decay, mirroring ``sei_thermal_pde``.
+
+    Adds the heat ``h_sei * rate`` to the source and integrates ``dc/dt = -rate`` with
+    ``rate = a_sei * c * exp(-ea_sei / (R * T))`` (T in kelvin, clamped to [273.15, 600]).
+    Other keyword arguments are those of :func:`solve_heat`. Returns ``(x, t, T, c)``.
+    """
+    return _march(
+        t_end,
+        ambient_c,
+        source,
+        a_sei=a_sei,
+        c_initial=c_initial,
+        ea_sei=ea_sei,
+        h_sei=h_sei,
+        **kwargs,  # type: ignore[arg-type]
+    )

@@ -96,3 +96,49 @@ def test_simulate_command_prints_uniform_heating_profile(capsys):
     assert len(temps) == 11
     expected = 25.0 + 200.0 * 100.0 / (config.RHO * config.CP)  # insulated: uniform ramp
     assert temps == pytest.approx([expected] * 11, abs=1e-3)
+
+
+def test_sei_off_matches_plain_solver():
+    from battery_pinn.fdm import solve_heat_sei
+
+    _, _, temp = solve_heat(300.0, 25.0, 5.0e3, n_t=50)
+    _, _, temp2, c = solve_heat_sei(300.0, 25.0, 0.0, 5.0e3, n_t=50)
+    assert np.array_equal(temp, temp2)
+    assert np.all(c == 1.0)
+
+
+def test_sei_decay_matches_exponential_at_fixed_temperature():
+    # Huge conduction and thermal mass keep T pinned at ambient, so dc/dt = -k c with
+    # k = A exp(-Ea / (R T)) and c(t) = exp(-k t) (explicit Euler, small dt).
+    from battery_pinn import config
+    from battery_pinn.fdm import solve_heat_sei
+
+    t_kelvin = 300.0
+    k_rate = 2.0e-3
+    a_sei = k_rate / np.exp(-config.EA_SEI / (config.R_GAS * t_kelvin))
+    t_end = 600.0
+    _, t, temp, c = solve_heat_sei(t_end, t_kelvin - 273.15, a_sei, 0.0, n_t=6000, thermal_mass=1e30, h_sei=0.0)
+    assert np.allclose(temp, t_kelvin - 273.15)
+    assert np.allclose(c[:, 0], np.exp(-k_rate * t), atol=2e-3)
+
+
+def test_sei_reaction_heats_the_cell_by_enthalpy_released():
+    # Insulated, no cooling: rho cp dT = h_sei * (c0 - c) per unit volume, so
+    # T_end - T0 = h_sei * (1 - c_end) / rho_cp, with the (tiny) T feedback on the rate ignored
+    # by choosing a rate that is nearly constant in temperature over the run.
+    from battery_pinn import config
+    from battery_pinn.fdm import solve_heat_sei
+
+    rho_cp, h_sei = 2.0e6, 1.0e6
+    a_sei = 1.0e-3 / np.exp(-config.EA_SEI / (config.R_GAS * 298.15))
+    _, _, temp, c = solve_heat_sei(200.0, 25.0, a_sei, 0.0, n_t=4000, thermal_mass=rho_cp, h_sei=h_sei)
+    assert np.allclose(temp[-1] - 25.0, h_sei * (1.0 - c[-1]) / rho_cp, rtol=0.02)
+
+
+def test_sei_argument_validation():
+    from battery_pinn.fdm import solve_heat_sei
+
+    with pytest.raises(ValueError):
+        solve_heat_sei(10.0, 25.0, -1.0)
+    with pytest.raises(ValueError):
+        solve_heat_sei(10.0, 25.0, 1.0, c_initial=1.5)
