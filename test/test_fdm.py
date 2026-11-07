@@ -142,3 +142,27 @@ def test_sei_argument_validation():
         solve_heat_sei(10.0, 25.0, -1.0)
     with pytest.raises(ValueError):
         solve_heat_sei(10.0, 25.0, 1.0, c_initial=1.5)
+
+
+def test_simulate_without_sei_option_has_two_columns(capsys):
+    from battery_pinn.cli import main
+
+    main(["simulate", "--duration", "50"])
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if not ln.startswith("#")]
+    assert all(len(ln.split()) == 2 for ln in lines)
+
+
+def test_simulate_sei_option_matches_solver(capsys):
+    from battery_pinn.cli import main
+    from battery_pinn.fdm import joule_source, solve_heat_sei
+
+    log_a = 12.0
+    main(["simulate", "--current", "5", "--resistance", "1", "--duration", "300", "--log-a-sei", str(log_a)])
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if not ln.startswith("#")]
+    rows = np.array([[float(v) for v in ln.split()] for ln in lines])
+    assert rows.shape == (11, 3)
+
+    _, _, temp, c = solve_heat_sei(300.0, 25.0, 10.0**log_a, joule_source(5.0, 1.0), n_x=11, n_t=200)
+    assert rows[:, 1] == pytest.approx(temp[-1], abs=1e-4)
+    assert rows[:, 2] == pytest.approx(c[-1], abs=1e-6)
+    assert np.all(rows[:, 2] <= 1.0)

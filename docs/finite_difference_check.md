@@ -47,3 +47,7 @@ It prints the heat source, then one `x  temperature` line per space point at the
 The Joule source is `I^2 * R`. With the defaults (insulated ends, no cooling) the profile is
 uniform and equals `T_ambient + I^2 R t / (rho cp)`. A run takes well under a second (it is
 tested to finish in under 1 s). It does not load or train any model.
+
+Adding `--log-a-sei 12` (log10 of the pre-exponential factor) switches on the SEI coupling of
+`solve_heat_sei`: the SEI heat is added to the source and a third column gives the stability
+`c` at the final time.

@@ -165,22 +165,31 @@ def _cmd_abuse(args):
 
 
 def _cmd_simulate(args):
-    from battery_pinn.fdm import joule_source, solve_heat
+    from battery_pinn.fdm import joule_source, solve_heat, solve_heat_sei
 
     source = joule_source(args.current, args.resistance)
-    x, t, temp = solve_heat(
-        args.duration,
-        args.ambient,
-        source,
-        n_x=args.n_x,
-        n_t=args.n_t,
-        newton_coeff=config.NEWTON_COOLING_COEFF if args.newton_cooling else 0.0,
-        boundary=args.boundary,
-    )
+    kwargs = {
+        "n_x": args.n_x,
+        "n_t": args.n_t,
+        "newton_coeff": config.NEWTON_COOLING_COEFF if args.newton_cooling else 0.0,
+        "boundary": args.boundary,
+    }
+    stability = None
+    if args.log_a_sei is None:
+        x, t, temp = solve_heat(args.duration, args.ambient, source, **kwargs)
+    else:
+        x, t, temp, stab = solve_heat_sei(args.duration, args.ambient, 10.0**args.log_a_sei, source, **kwargs)
+        stability = stab[-1]
     print(f"# heat source {source:.6g} W/m3, ambient {args.ambient:g} C, {args.duration:g} s")
-    print("# x (normalised), temperature (C) at the final time")
-    for xi, ti in zip(x, temp[-1]):
-        print(f"{xi:.4f}  {ti:.4f}")
+    if stability is None:
+        print("# x (normalised), temperature (C) at the final time")
+        for xi, ti in zip(x, temp[-1]):
+            print(f"{xi:.4f}  {ti:.4f}")
+    else:
+        print(f"# SEI decay with log10(A) = {args.log_a_sei:g}")
+        print("# x (normalised), temperature (C), SEI stability c at the final time")
+        for xi, ti, ci in zip(x, temp[-1], stability):
+            print(f"{xi:.4f}  {ti:.4f}  {ci:.6f}")
 
 
 def _cmd_demo(args):
@@ -420,6 +429,12 @@ def build_parser():
     sm.add_argument("--n-t", type=int, default=200, help="number of time steps")
     sm.add_argument("--boundary", choices=("neumann", "dirichlet"), default="neumann")
     sm.add_argument("--newton-cooling", action="store_true", help="add the Newton surface-cooling sink")
+    sm.add_argument(
+        "--log-a-sei",
+        type=float,
+        default=None,
+        help="log10 of the SEI pre-exponential factor; adds SEI decay and its heat and prints c",
+    )
     sm.set_defaults(func=_cmd_simulate)
 
     d = sub.add_parser("demo", help="generate data, train briefly, evaluate, abuse-test")
