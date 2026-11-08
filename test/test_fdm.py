@@ -166,3 +166,22 @@ def test_simulate_sei_option_matches_solver(capsys):
     assert rows[:, 1] == pytest.approx(temp[-1], abs=1e-4)
     assert rows[:, 2] == pytest.approx(c[-1], abs=1e-6)
     assert np.all(rows[:, 2] <= 1.0)
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ["--newton-cooling", "--boundary", "dirichlet"],
+        ["--log-a-sei", "-2.0"],
+        ["--newton-cooling", "--log-a-sei", "-2.0", "--duration", "600"],
+    ],
+)
+def test_simulate_option_variants_run_under_a_second(extra, capsys):
+    import time
+
+    from battery_pinn.cli import main
+
+    start = time.perf_counter()
+    main(["simulate", "--current", "5", "--resistance", "2", *extra])
+    assert time.perf_counter() - start < 1.0
+    assert capsys.readouterr().out.strip()
