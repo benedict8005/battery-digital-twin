@@ -330,6 +330,14 @@ Python 3.12 (plus Python 3.10 on Ubuntu), installing CPU-only PyTorch, and once 
 without PyTorch/DeepXDE to keep the skip path working. The test session pins PyTorch's default
 device to the CPU so results do not depend on the runner's GPU.
 
+### Independent physics check
+
+`battery_pinn.fdm` is a NumPy finite-difference solver for the same 1-D heat equation,
+checked against analytical cases in `test/test_fdm.py`. `python -m battery_pinn simulate
+--current 10 --resistance 2 --ambient 25` prints a temperature profile in well under a second
+without any model. Tolerances and the equation are in
+[`docs/finite_difference_check.md`](docs/finite_difference_check.md).
+
 ### Coverage
 
 ```bash
