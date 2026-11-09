@@ -185,3 +185,17 @@ def test_simulate_option_variants_run_under_a_second(extra, capsys):
     main(["simulate", "--current", "5", "--resistance", "2", *extra])
     assert time.perf_counter() - start < 1.0
     assert capsys.readouterr().out.strip()
+
+
+def test_cooling_error_shrinks_in_proportion_to_step_size():
+    # docs/finite_difference_check.md states the scheme is first order in time:
+    # doubling n_t should roughly halve the error against the exponential.
+    h, t_end = 2.0e3, 1.0e3
+
+    def max_error(n_t):
+        _, t, temp = solve_heat(t_end, 25.0, 0.0, newton_coeff=h, thermal_mass=RHO_CP, t_initial_c=60.0, n_t=n_t)
+        return np.max(np.abs(temp[:, 0] - (25.0 + 35.0 * np.exp(-h * t / RHO_CP))))
+
+    coarse, fine = max_error(500), max_error(1000)
+    assert fine < coarse
+    assert 1.8 < coarse / fine < 2.2
