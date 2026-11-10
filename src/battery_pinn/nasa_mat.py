@@ -25,6 +25,7 @@ import numpy.typing as npt
 import pandas as pd
 
 from battery_pinn import config
+from battery_pinn.validation import DataValidationError
 
 METADATA_COLUMNS = [
     "type",
@@ -64,23 +65,42 @@ def read_cycles(
     from scipy.io import loadmat
 
     battery_id = os.path.splitext(os.path.basename(mat_path))[0]
-    mat = loadmat(mat_path)
+    try:
+        mat = loadmat(mat_path)
+    except FileNotFoundError:
+        raise
+    except Exception as exc:  # scipy raises many types for truncated or non-MATLAB files
+        raise DataValidationError(f"{mat_path}: cannot read as a MATLAB file ({exc})") from exc
     if battery_id not in mat:
-        raise ValueError(f"{mat_path}: expected a top-level variable named {battery_id!r}")
-    cycles = mat[battery_id]["cycle"][0, 0]
+        raise DataValidationError(f"{mat_path}: expected a top-level variable named {battery_id!r}")
+    try:
+        cycles = mat[battery_id]["cycle"][0, 0]
+    except (KeyError, IndexError, ValueError, TypeError) as exc:
+        raise DataValidationError(f"{mat_path}: variable {battery_id!r} has no 'cycle' struct array") from exc
+    if cycles.ndim != 2 or cycles.shape[1] == 0:
+        raise DataValidationError(f"{mat_path}: the 'cycle' array is empty")
     for i in range(cycles.shape[1]):
+        where = f"{mat_path}: cycle {i}"
         cycle = cycles[0, i]
-        struct = cycle["data"][0, 0]
+        missing = [f for f in ("type", "ambient_temperature", "time", "data") if f not in (cycle.dtype.names or ())]
+        if missing:
+            raise DataValidationError(f"{where}: missing field(s) {', '.join(missing)}")
+        struct = cycle["data"][0, 0] if cycle["data"].size else None
+        if struct is None or not getattr(struct, "dtype", None) or not struct.dtype.names:
+            raise DataValidationError(f"{where}: empty 'data' struct")
         data: dict[str, Any] = {}
         for name in struct.dtype.names:
             field = struct[name]
             data[name] = _scalar(field) if name in SCALAR_FIELDS else np.asarray(field).ravel()
-        yield (
-            str(cycle["type"].ravel()[0]),
-            float(np.asarray(cycle["ambient_temperature"]).ravel()[0]),
-            np.asarray(cycle["time"], dtype=float).ravel(),
-            data,
-        )
+        try:
+            ctype = str(cycle["type"].ravel()[0])
+            ambient = float(np.asarray(cycle["ambient_temperature"]).ravel()[0])
+            time_vec = np.asarray(cycle["time"], dtype=float).ravel()
+        except (IndexError, ValueError, TypeError) as exc:
+            raise DataValidationError(f"{where}: type, ambient_temperature or time is empty or not numeric") from exc
+        if time_vec.size != 6:
+            raise DataValidationError(f"{where}: 'time' must be a 6-element date vector, got {time_vec.size}")
+        yield ctype, ambient, time_vec, data
 
 
 def _measurements_frame(data: dict[str, Any]) -> pd.DataFrame:
