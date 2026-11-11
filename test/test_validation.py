@@ -97,3 +97,47 @@ def test_convert_surfaces_the_error(tmp_path):
 
 def test_validation_error_is_a_value_error():
     assert issubclass(DataValidationError, ValueError)
+
+
+# ----------------------------------------------------------------------------------------
+# Per-cycle CSVs read by the ETL
+# ----------------------------------------------------------------------------------------
+from battery_pinn import etl  # noqa: E402
+
+
+def test_cycle_csv_missing_columns_is_still_a_value_error(tmp_path):
+    path = tmp_path / "c.csv"
+    path.write_text("Time,Voltage_measured\n0,4.0\n")
+    with pytest.raises(ValueError, match="missing required columns"):  # old contract
+        etl.load_cycle_file(str(path))
+    with pytest.raises(DataValidationError, match=r"c\.csv.*Current_measured"):
+        etl.load_cycle_file(str(path))
+
+
+def test_cycle_csv_zero_bytes_names_the_file(tmp_path):
+    path = tmp_path / "c.csv"
+    path.write_text("")
+    with pytest.raises(DataValidationError, match=r"c\.csv.*empty"):
+        etl.load_cycle_file(str(path))
+
+
+def test_cycle_csv_header_only_is_rejected(tmp_path):
+    path = tmp_path / "c.csv"
+    path.write_text("Time,Voltage_measured,Current_measured,Temperature_measured\n")
+    with pytest.raises(DataValidationError, match=r"c\.csv.*no data rows"):
+        etl.load_cycle_file(str(path))
+
+
+def test_cycle_csv_out_of_order_time_names_the_row(tmp_path):
+    path = tmp_path / "c.csv"
+    path.write_text(
+        "Time,Voltage_measured,Current_measured,Temperature_measured\n0,4.0,-1,25\n10,3.9,-1,25\n5,3.8,-1,25\n"
+    )
+    with pytest.raises(DataValidationError, match=r"c\.csv.*'Time'.*row 2"):
+        etl.load_cycle_file(str(path))
+
+
+def test_cycle_csv_valid_file_loads(tmp_path):
+    path = tmp_path / "c.csv"
+    path.write_text("Time,Voltage_measured,Current_measured,Temperature_measured\n0,4.0,-1,25\n10,3.9,-1,25\n")
+    assert len(etl.load_cycle_file(str(path))) == 2

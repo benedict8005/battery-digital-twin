@@ -44,6 +44,7 @@ if TYPE_CHECKING:  # the stubs define it; pandas does not export it at runtime
 
 from battery_pinn import config
 from battery_pinn.data import BatteryCoverageError
+from battery_pinn.validation import DataValidationError
 
 _NUMBER_RE = re.compile(r"\d+\.?\d*(?:[eE][+-]?\d+)?")
 _TIME_COMPONENTS = ["y", "m", "d", "hr", "mi", "sec"]
@@ -261,11 +262,31 @@ def build_gold(silver_discharge: pd.DataFrame, silver_impedance: pd.DataFrame) -
 # Feature engineering
 # ----------------------------------------------------------------------------------------
 def load_cycle_file(path: str) -> pd.DataFrame:
-    """Read one raw per-cycle CSV, checking it has the columns the pipeline uses."""
-    df = pd.read_csv(path)
+    """Read one raw per-cycle CSV, checking it is usable.
+
+    Raises :class:`~battery_pinn.validation.DataValidationError` naming the file (and the
+    row) when the file is empty, lacks a column the pipeline uses, or has a ``Time``
+    column that goes backwards.
+    """
+    try:
+        df = pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        raise DataValidationError(f"{path}: file is empty (no header or rows)") from None
+    except pd.errors.ParserError as exc:
+        raise DataValidationError(f"{path}: cannot parse CSV ({exc})") from exc
     missing = [c for c in config.RAW_CYCLE_COLUMNS if c not in df.columns]
     if missing:
-        raise ValueError(f"{path} is missing required columns: {missing}")
+        raise DataValidationError(f"{path} is missing required columns: {missing}")
+    if df.empty:
+        raise DataValidationError(f"{path}: cycle has a header but no data rows")
+    time = pd.to_numeric(df["Time"], errors="coerce")
+    steps = time.diff()
+    backwards = steps[steps < 0]
+    if not backwards.empty:
+        row = int(backwards.index[0])
+        raise DataValidationError(
+            f"{path}: column 'Time' is out of order at row {row} ({time.iloc[row - 1]} then {time.iloc[row]})"
+        )
     return cast("pd.DataFrame", df.reset_index(drop=True))
 
 
