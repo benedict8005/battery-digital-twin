@@ -141,3 +141,59 @@ def test_cycle_csv_valid_file_loads(tmp_path):
     path = tmp_path / "c.csv"
     path.write_text("Time,Voltage_measured,Current_measured,Temperature_measured\n0,4.0,-1,25\n10,3.9,-1,25\n")
     assert len(etl.load_cycle_file(str(path))) == 2
+
+
+# ----------------------------------------------------------------------------------------
+# metadata.csv read by the ETL
+# ----------------------------------------------------------------------------------------
+_META_HEADER = "battery_id,type,filename,start_time,ambient_temperature,capacity,Re,Rct\n"
+
+
+def _write_meta(tmp_path, body):
+    (tmp_path / "metadata.csv").write_text(_META_HEADER + body)
+    return str(tmp_path)
+
+
+def test_metadata_missing_columns_is_still_a_value_error(tmp_path):
+    (tmp_path / "metadata.csv").write_text("battery_id,type\nB0005,discharge\n")
+    with pytest.raises(ValueError, match="missing required columns"):  # old contract
+        etl.load_raw_metadata(str(tmp_path))
+    with pytest.raises(DataValidationError, match=r"metadata\.csv.*filename"):
+        etl.load_raw_metadata(str(tmp_path))
+
+
+def test_metadata_zero_bytes_names_the_file(tmp_path):
+    (tmp_path / "metadata.csv").write_text("")
+    with pytest.raises(DataValidationError, match=r"metadata\.csv.*empty"):
+        etl.load_raw_metadata(str(tmp_path))
+
+
+def test_metadata_header_only_is_rejected(tmp_path):
+    with pytest.raises(DataValidationError, match=r"metadata\.csv.*no data rows"):
+        etl.load_raw_metadata(_write_meta(tmp_path, ""))
+
+
+def test_metadata_ambiguous_columns_are_rejected(tmp_path):
+    (tmp_path / "metadata.csv").write_text(
+        _META_HEADER.rstrip("\n") + ",CAPACITY\n" + "B0005,discharge,1.csv,x,24,1.8,,,2\n"
+    )
+    with pytest.raises(DataValidationError, match=r"metadata\.csv.*'capacity' is ambiguous"):
+        etl.load_raw_metadata(str(tmp_path))
+
+
+@pytest.mark.parametrize(
+    "column, body",
+    [
+        ("battery_id", "B0005,discharge,1.csv,x,24,1.8,,\n,discharge,2.csv,x,24,1.7,,\n"),
+        ("type", "B0005,discharge,1.csv,x,24,1.8,,\nB0005,   ,2.csv,x,24,1.7,,\n"),
+        ("filename", "B0005,discharge,1.csv,x,24,1.8,,\nB0005,discharge,,x,24,1.7,,\n"),
+    ],
+)
+def test_metadata_blank_identifier_names_column_and_row(tmp_path, column, body):
+    with pytest.raises(DataValidationError, match=rf"metadata\.csv.*'{column}' is blank at row 1"):
+        etl.load_raw_metadata(_write_meta(tmp_path, body))
+
+
+def test_metadata_unparseable_numbers_still_become_nan(tmp_path):
+    bronze = etl.load_raw_metadata(_write_meta(tmp_path, "B0005,discharge,1.csv,x,24,oops,,\n"))
+    assert bronze["capacity"].isna().all()
