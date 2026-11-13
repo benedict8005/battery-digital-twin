@@ -8,6 +8,7 @@ file and, where it applies, the cycle, column or row at fault.
 
 from collections.abc import Sequence
 
+import numpy as np
 import pandas as pd
 
 
@@ -31,7 +32,7 @@ def check_processed_table(df: pd.DataFrame, path: object, required: Sequence[str
         if not pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
             numeric = pd.to_numeric(values, errors="coerce")
             bad = values.notna() & numeric.isna()
-            line = int(bad.to_numpy().argmax()) + 2
+            line = int(np.flatnonzero(bad.to_numpy())[0]) + 2
             raise DataValidationError(
                 f"{path}: column '{column}' is not numeric (row {line}: {values.iloc[line - 2]!r})"
             )
