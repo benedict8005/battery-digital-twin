@@ -197,3 +197,46 @@ def test_metadata_blank_identifier_names_column_and_row(tmp_path, column, body):
 def test_metadata_unparseable_numbers_still_become_nan(tmp_path):
     bronze = etl.load_raw_metadata(_write_meta(tmp_path, "B0005,discharge,1.csv,x,24,oops,,\n"))
     assert bronze["capacity"].isna().all()
+
+
+# --- processed tables -------------------------------------------------------------------
+
+from battery_pinn.config import REQUIRED_COLUMNS  # noqa: E402
+from battery_pinn.data import load_dataset  # noqa: E402
+
+
+def _processed_rows(n=3):
+    import pandas as pd
+
+    row = dict.fromkeys(REQUIRED_COLUMNS, 1.0)
+    return pd.DataFrame([{"battery_id": "B0005", "cycle_number": 1, "ambient_temperature": 24.0, **row}] * n)
+
+
+def test_processed_table_missing_column_is_named(tmp_path):
+    df = _processed_rows().drop(columns=["SoH"])
+    df.to_csv(tmp_path / "p.csv", index=False)
+    with pytest.raises(DataValidationError, match=r"p\.csv is missing required columns: \['SoH'\]"):
+        load_dataset(tmp_path / "p.csv")
+
+
+def test_processed_table_missing_battery_id_column(tmp_path):
+    _processed_rows().drop(columns=["battery_id"]).to_csv(tmp_path / "p.csv", index=False)
+    with pytest.raises(DataValidationError, match="battery_id"):
+        load_dataset(tmp_path / "p.csv")
+
+
+def test_processed_table_non_numeric_cell_names_column_and_row(tmp_path):
+    df = _processed_rows(4)
+    df["Re"] = df["Re"].astype(object)
+    df.loc[2, "Re"] = "oops"
+    df.to_csv(tmp_path / "p.csv", index=False)
+    with pytest.raises(DataValidationError, match=r"column 'Re' is not numeric \(row 4: 'oops'\)"):
+        load_dataset(tmp_path / "p.csv")
+
+
+def test_processed_table_nan_and_inf_still_dropped_not_rejected(tmp_path):
+    df = _processed_rows(4)
+    df.loc[1, "Re"] = float("nan")
+    df.loc[2, "SoH"] = float("inf")
+    df.to_csv(tmp_path / "p.csv", index=False)
+    assert len(load_dataset(tmp_path / "p.csv", log=None)) == 2
