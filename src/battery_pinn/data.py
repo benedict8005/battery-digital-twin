@@ -10,6 +10,7 @@ import pandas as pd
 
 from battery_pinn import config
 from battery_pinn.config import REQUIRED_COLUMNS
+from battery_pinn.validation import check_processed_table
 
 BatteryReport = dict[str, dict[str, Any]]
 """Per-battery coverage record, as returned by :func:`battery_report`."""
@@ -116,9 +117,7 @@ def load_dataset(
     present in the file is expected, so a battery that loses all of its cycles still fails.
     """
     raw = pd.read_csv(path)
-    missing = [c for c in REQUIRED_COLUMNS if c not in raw.columns]
-    if missing:
-        raise ValueError(f"{path} is missing required columns: {missing}")
+    check_processed_table(raw, path, [c for c in REQUIRED_COLUMNS if c != "battery_id"], text=["battery_id"])
     df = raw.replace([np.inf, -np.inf], np.nan)
     df = df.dropna(subset=REQUIRED_COLUMNS)
 

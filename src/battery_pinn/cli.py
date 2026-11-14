@@ -1,4 +1,4 @@
-"""Command-line interface: convert-mat, prepare-data, generate-data, train, evaluate, abuse-test, simulate, demo."""
+"""Command-line interface: convert-mat, prepare-data, inspect-data, generate-data, train, evaluate, abuse-test, simulate, demo."""
 
 import argparse
 import glob
@@ -164,6 +164,21 @@ def _cmd_abuse(args):
     print(f"Saved plot to {plot_path} and abuse_test_summary.json")
 
 
+def _cmd_inspect(args):
+    from battery_pinn.report import format_report, inspect_file
+
+    paths = (
+        [args.data]
+        if os.path.isfile(args.data)
+        else [os.path.join(args.data, f) for f in (config.TRAIN_FILE, config.HELD_OUT_FILE)]
+    )
+    missing = [p for p in paths if not os.path.isfile(p)]
+    if missing:
+        raise SystemExit(f"No such data file: {', '.join(missing)}. Run `prepare-data` first.")
+    for path in paths:
+        print(format_report(inspect_file(path), title=path))
+
+
 def _cmd_simulate(args):
     from battery_pinn.fdm import joule_source, solve_heat, solve_heat_sei
 
@@ -285,6 +300,20 @@ def build_parser():
         "of error); only for legacy-comparison runs",
     )
     pd_.set_defaults(func=_cmd_prepare)
+
+    ins = sub.add_parser(
+        "inspect-data",
+        help="print rows, cycles, column ranges and missing values of processed tables",
+        description=(
+            f"--data is a processed CSV, or a folder holding {config.TRAIN_FILE} and {config.HELD_OUT_FILE}. "
+            "Prints rows and cycles per battery, the range and missing count of every numeric column, "
+            "and the cycles the loader would drop. A malformed table is reported with file, column and row."
+        ),
+    )
+    ins.add_argument(
+        "--data", default=config.DEFAULT_PROCESSED_DIR, help="processed CSV or folder (default: %(default)s)"
+    )
+    ins.set_defaults(func=_cmd_inspect)
 
     g = sub.add_parser("generate-data", help="write a synthetic train/held-out dataset")
     g.add_argument("--out", default=config.DEFAULT_SYNTHETIC_DIR)
