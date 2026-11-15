@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from battery_pinn import report
 from battery_pinn.report import column_report, dropped_cycles, format_report, inspect_file, inspect_table
 from battery_pinn.validation import DataValidationError
 
@@ -85,3 +86,29 @@ def test_inspect_file_checks_schema(tmp_path):
     make_table().drop(columns=["SoH"]).to_csv(bad, index=False)
     with pytest.raises(DataValidationError, match="SoH"):
         inspect_file(bad)
+
+
+def test_inspect_raw_reports_skip_reasons(raw_dataset):
+    summary = report.inspect_raw(raw_dataset)
+    # Counts worked out by hand from the synthetic raw dataset (see test_etl).
+    assert summary["total_candidates"] == 19
+    assert summary["total_kept"] == 13
+    assert summary["skip_counts"] == {"file_not_found": 1, "too_short": 2, "low_capacity": 3}
+    assert summary["per_battery"]["B0005"]["dropped"] == {"file_not_found": 1, "too_short": 1, "low_capacity": 1}
+
+
+def test_inspect_raw_rejects_mat_folder(tmp_path):
+    from conftest import write_fake_mat
+
+    write_fake_mat(str(tmp_path / "B0005.mat"), "B0005")
+    with pytest.raises(DataValidationError, match="convert-mat"):
+        report.inspect_raw(tmp_path)
+
+
+def test_inspect_data_raw_prints_skip_reasons(raw_dataset, capsys):
+    from battery_pinn import cli
+
+    cli.main(["inspect-data", "--raw", raw_dataset])
+    out = capsys.readouterr().out
+    assert "Skipped (too short):      2" in out
+    assert "B0005: 2/5 cycles kept, dropped: 1 file_not_found, 1 too_short, 1 low_capacity" in out

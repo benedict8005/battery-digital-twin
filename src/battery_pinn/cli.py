@@ -165,8 +165,12 @@ def _cmd_abuse(args):
 
 
 def _cmd_inspect(args):
-    from battery_pinn.report import format_report, inspect_file
+    from battery_pinn.etl import format_summary
+    from battery_pinn.report import format_report, inspect_file, inspect_raw
 
+    if args.raw:
+        print(format_summary(inspect_raw(args.raw)))
+        return
     paths = (
         [args.data]
         if os.path.isfile(args.data)
@@ -312,6 +316,11 @@ def build_parser():
     )
     ins.add_argument(
         "--data", default=config.DEFAULT_PROCESSED_DIR, help="processed CSV or folder (default: %(default)s)"
+    )
+    ins.add_argument(
+        "--raw",
+        default=None,
+        help="instead, report which cycles of this raw per-cycle CSV folder prepare-data would skip, and why",
     )
     ins.set_defaults(func=_cmd_inspect)
 

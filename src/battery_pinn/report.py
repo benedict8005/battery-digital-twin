@@ -11,9 +11,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from battery_pinn import config
+from battery_pinn import config, etl
 from battery_pinn.data import battery_report
-from battery_pinn.validation import check_processed_table
+from battery_pinn.validation import DataValidationError, check_processed_table
 
 _TEXT_COLUMNS = ("battery_id",)
 
@@ -78,6 +78,23 @@ def inspect_file(path: str | PathLike[str]) -> dict[str, Any]:
     df = pd.read_csv(path)
     check_processed_table(df, path, [c for c in config.REQUIRED_COLUMNS if c != "battery_id"], text=["battery_id"])
     return inspect_table(df)
+
+
+def inspect_raw(raw_dir: str | PathLike[str]) -> dict[str, Any]:
+    """Run the ETL cycle selection on a raw per-cycle CSV folder without writing anything.
+
+    Returns the summary of :func:`battery_pinn.etl.build_feature_table`: candidate and kept
+    cycle counts, and per battery how many cycles were skipped for each reason
+    (``file_not_found``, ``too_short``, ``low_capacity``).
+    """
+    raw = str(raw_dir)
+    if config.is_mat_folder(raw):
+        raise DataValidationError(
+            f"{raw}: holds NASA .mat files; run `convert-mat` first and pass the folder it writes"
+        )
+    bronze = etl.load_raw_metadata(raw)
+    gold = etl.build_gold(etl.build_silver_discharge(bronze), etl.build_silver_impedance(bronze))
+    return etl.build_feature_table(gold, raw)[1]
 
 
 def format_report(report: dict[str, Any], title: str = "Data report") -> str:
