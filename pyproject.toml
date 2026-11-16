@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "ruff", "mypy", "pandas-stubs", "scipy-stubs"]
+dev = ["pytest", "hypothesis", "pytest-cov", "ruff", "mypy", "pandas-stubs", "scipy-stubs"]
 
 [project.scripts]
 battery-pinn = "battery_pinn.cli:main"
