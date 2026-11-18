@@ -44,6 +44,7 @@ if TYPE_CHECKING:  # the stubs define it; pandas does not export it at runtime
 
 from battery_pinn import config
 from battery_pinn.data import BatteryCoverageError
+from battery_pinn.validation import DataValidationError
 
 _NUMBER_RE = re.compile(r"\d+\.?\d*(?:[eE][+-]?\d+)?")
 _TIME_COMPONENTS = ["y", "m", "d", "hr", "mi", "sec"]
@@ -67,6 +68,11 @@ def load_raw_metadata(raw_dir: str) -> pd.DataFrame:
     The Spark SQL matched columns case-insensitively (``Capacity`` in the file became
     ``capacity``), so the same is done here. Numeric columns are coerced the way a SQL
     ``CAST`` would: anything unparseable becomes NaN.
+
+    Raises :class:`~battery_pinn.validation.DataValidationError` (a ``ValueError``) naming
+    the file, and the column or row, when the file is empty or unparseable, lacks a required
+    column, has two columns that differ only in case, or has a row with a blank
+    ``battery_id``, ``type`` or ``filename``.
     """
     path = config.metadata_path(raw_dir)
     if not os.path.isfile(path):
@@ -74,7 +80,12 @@ def load_raw_metadata(raw_dir: str) -> pd.DataFrame:
             f"{path} not found. Expected the raw dataset folder to contain "
             f"{config.METADATA_FILENAME} and a {config.CYCLE_DATA_SUBDIR}/ folder of cycle CSVs."
         )
-    df = pd.read_csv(path)
+    try:
+        df = pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        raise DataValidationError(f"{path}: file is empty (no header or rows)") from None
+    except pd.errors.ParserError as exc:
+        raise DataValidationError(f"{path}: cannot parse CSV ({exc})") from exc
 
     by_lower: dict[str, list[str]] = {}
     for col in df.columns:
@@ -84,14 +95,21 @@ def load_raw_metadata(raw_dir: str) -> pd.DataFrame:
     for canonical in config.RAW_METADATA_COLUMNS:
         matches = by_lower.get(canonical.lower(), [])
         if len(matches) > 1:
-            raise ValueError(f"{path}: column {canonical!r} is ambiguous ({matches}).")
+            raise DataValidationError(f"{path}: column {canonical!r} is ambiguous ({matches}).")
         if matches:
             rename[matches[0]] = canonical
         else:
             missing.append(canonical)
     if missing:
-        raise ValueError(f"{path} is missing required columns: {missing}")
+        raise DataValidationError(f"{path} is missing required columns: {missing}")
     df = df.rename(columns=rename)
+    if df.empty:
+        raise DataValidationError(f"{path}: metadata has a header but no data rows")
+    for col in ("battery_id", "type", "filename"):
+        blank = df[col].isna() | (df[col].astype(str).str.strip() == "")
+        if blank.any():
+            row = int(blank.idxmax())
+            raise DataValidationError(f"{path}: column {col!r} is blank at row {row} (0-based, excluding the header)")
 
     for col in ("ambient_temperature", "capacity", "Re", "Rct"):
         df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -261,11 +279,31 @@ def build_gold(silver_discharge: pd.DataFrame, silver_impedance: pd.DataFrame) -
 # Feature engineering
 # ----------------------------------------------------------------------------------------
 def load_cycle_file(path: str) -> pd.DataFrame:
-    """Read one raw per-cycle CSV, checking it has the columns the pipeline uses."""
-    df = pd.read_csv(path)
+    """Read one raw per-cycle CSV, checking it is usable.
+
+    Raises :class:`~battery_pinn.validation.DataValidationError` naming the file (and the
+    row) when the file is empty, lacks a column the pipeline uses, or has a ``Time``
+    column that goes backwards.
+    """
+    try:
+        df = pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        raise DataValidationError(f"{path}: file is empty (no header or rows)") from None
+    except pd.errors.ParserError as exc:
+        raise DataValidationError(f"{path}: cannot parse CSV ({exc})") from exc
     missing = [c for c in config.RAW_CYCLE_COLUMNS if c not in df.columns]
     if missing:
-        raise ValueError(f"{path} is missing required columns: {missing}")
+        raise DataValidationError(f"{path} is missing required columns: {missing}")
+    if df.empty:
+        raise DataValidationError(f"{path}: cycle has a header but no data rows")
+    time = pd.to_numeric(df["Time"], errors="coerce")
+    steps = time.diff()
+    backwards = steps[steps < 0]
+    if not backwards.empty:
+        row = int(backwards.index[0])
+        raise DataValidationError(
+            f"{path}: column 'Time' is out of order at row {row} ({time.iloc[row - 1]} then {time.iloc[row]})"
+        )
     return cast("pd.DataFrame", df.reset_index(drop=True))
 
 

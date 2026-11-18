@@ -203,3 +203,20 @@ def test_prepare_data_and_generate_data_share_one_schema(raw_dataset, tmp_path):
 def test_prepare_data_missing_raw_folder_is_a_clear_error(tmp_path):
     with pytest.raises(FileNotFoundError, match="metadata.csv"):
         main(["prepare-data", "--raw", str(tmp_path / "nope"), "--out", str(tmp_path / "out")])
+
+
+def test_inspect_data_reports_a_folder_and_a_file(tmp_path, capsys):
+    from test_report import make_table
+
+    make_table().to_csv(tmp_path / config.TRAIN_FILE, index=False)
+    make_table().to_csv(tmp_path / config.HELD_OUT_FILE, index=False)
+    main(["inspect-data", "--data", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert out.count("rows ---") == 2 and "B2: cycles [1] (column 'SoH')" in out
+    main(["inspect-data", "--data", str(tmp_path / config.TRAIN_FILE)])
+    assert capsys.readouterr().out.count("rows ---") == 1
+
+
+def test_inspect_data_missing_folder_is_a_readable_exit(tmp_path):
+    with pytest.raises(SystemExit, match="prepare-data"):
+        main(["inspect-data", "--data", str(tmp_path)])
