@@ -12,6 +12,16 @@ from battery_pinn import config
 from battery_pinn.config import REQUIRED_COLUMNS
 from battery_pinn.validation import check_processed_table
 
+__all__ = [
+    "BatteryCoverageError",
+    "battery_report",
+    "build_points_and_targets",
+    "coverage_problems",
+    "format_battery_report",
+    "load_dataset",
+    "representative_profile",
+]
+
 BatteryReport = dict[str, dict[str, Any]]
 """Per-battery coverage record, as returned by :func:`battery_report`."""
 

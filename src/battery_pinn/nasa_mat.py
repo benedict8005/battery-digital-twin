@@ -27,6 +27,13 @@ import pandas as pd
 from battery_pinn import config
 from battery_pinn.validation import DataValidationError
 
+__all__ = [
+    "METADATA_COLUMNS",
+    "SCALAR_FIELDS",
+    "convert_mat_dir",
+    "read_cycles",
+]
+
 METADATA_COLUMNS = [
     "type",
     "start_time",

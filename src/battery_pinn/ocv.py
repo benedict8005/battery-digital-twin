@@ -7,6 +7,11 @@ from typing import Any
 import numpy as np
 import torch
 
+__all__ = [
+    "fit_ocv_coeffs",
+    "ocv_from_soc_torch",
+]
+
 
 def fit_ocv_coeffs(df_agg: Any, degree: int = 4) -> np.ndarray:
     """Fit OCV(SoC) with a polynomial against the representative discharge curve.

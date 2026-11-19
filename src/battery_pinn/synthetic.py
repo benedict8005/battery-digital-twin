@@ -10,6 +10,12 @@ import pandas as pd
 
 from battery_pinn.config import AMBIENT_GROUPS_C, BINS_PER_CYCLE, PROCESSED_COLUMNS
 
+__all__ = [
+    "DISCHARGE_CURRENT_A",
+    "generate_cells",
+    "generate_train_and_held_out",
+]
+
 DISCHARGE_CURRENT_A = -2.0
 
 

@@ -12,6 +12,14 @@ from collections.abc import Callable
 
 import torch
 
+__all__ = [
+    "DEVICE_CHOICES",
+    "activate",
+    "describe",
+    "probe",
+    "resolve_device",
+]
+
 DEVICE_CHOICES = ("auto", "cpu", "cuda")
 
 
