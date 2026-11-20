@@ -12,8 +12,10 @@ PACKAGE = pathlib.Path(__file__).resolve().parents[1] / "src" / "battery_pinn"
 
 # Modules whose public surface is declared so far (extend as each module is done).
 DECLARED = [
+    "checkpoint",
     "data",
     "device",
+    "etl",
     "fdm",
     "interpolation",
     "nasa_mat",
