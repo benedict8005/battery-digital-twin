@@ -13,6 +13,7 @@ PACKAGE = pathlib.Path(__file__).resolve().parents[1] / "src" / "battery_pinn"
 # Modules whose public surface is declared so far (extend as each module is done).
 DECLARED = [
     "checkpoint",
+    "config",
     "data",
     "device",
     "etl",
@@ -77,3 +78,11 @@ def test_py_typed_marker_is_shipped():
     assert (PACKAGE / "py.typed").is_file()
     pyproject = (PACKAGE.parents[1] / "pyproject.toml").read_text()
     assert '[tool.setuptools.package-data]\nbattery_pinn = ["py.typed"]' in pyproject
+
+
+def test_config_exports_every_public_constant():
+    """``config`` is mostly constants, so check them as well as its functions."""
+    tree = _parse("config")
+    exported = set(_declared_all(tree) or [])
+    public = {n for n in _top_level_names(tree) if not n.startswith("_") and n != "__all__"}
+    assert public <= exported, f"config: public but not in __all__: {sorted(public - exported)}"
