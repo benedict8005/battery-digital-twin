@@ -18,6 +18,8 @@ DECLARED = [
     "device",
     "etl",
     "fdm",
+    "identifiability",
+    "inference",
     "interpolation",
     "nasa_mat",
     "ocv",

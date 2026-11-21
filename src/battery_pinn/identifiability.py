@@ -21,6 +21,12 @@ import math
 
 from battery_pinn import config
 
+__all__ = [
+    "assess_log_a_sei",
+    "format_assessment",
+    "spread_initial_values",
+]
+
 
 def spread_initial_values(n_seeds, spread_decades, centre):
     """Per-seed initial ``log10(A_sei)`` values spaced evenly across ``centre +- spread``."""
