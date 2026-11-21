@@ -15,6 +15,15 @@ from battery_pinn import config, etl
 from battery_pinn.data import battery_report
 from battery_pinn.validation import DataValidationError, check_processed_table
 
+__all__ = [
+    "column_report",
+    "dropped_cycles",
+    "format_report",
+    "inspect_file",
+    "inspect_raw",
+    "inspect_table",
+]
+
 _TEXT_COLUMNS = ("battery_id",)
 
 

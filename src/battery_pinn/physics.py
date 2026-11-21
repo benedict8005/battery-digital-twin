@@ -12,6 +12,13 @@ import torch
 from battery_pinn import config
 from battery_pinn.ocv import ocv_from_soc_torch
 
+__all__ = [
+    "arrhenius_exponents",
+    "make_pde",
+    "make_thermal_variables",
+    "recommended_log_a_sei",
+]
+
 
 def arrhenius_exponents(temps_c: Any, ea: float = config.EA_SEI, r_gas: float = config.R_GAS) -> np.ndarray:
     """Unclamped Arrhenius exponent -Ea/(R*T) at the given Celsius temperatures."""

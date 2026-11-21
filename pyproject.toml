@@ -27,6 +27,9 @@ battery-pinn = "battery_pinn.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+battery_pinn = ["py.typed"]
+
 [tool.pytest.ini_options]
 testpaths = ["test"]
 pythonpath = ["src"]

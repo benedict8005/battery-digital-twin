@@ -46,6 +46,25 @@ from battery_pinn import config
 from battery_pinn.data import BatteryCoverageError
 from battery_pinn.validation import DataValidationError
 
+__all__ = [
+    "SKIP_REASONS",
+    "add_state_of_charge",
+    "build_feature_table",
+    "build_gold",
+    "build_silver_discharge",
+    "build_silver_impedance",
+    "coverage_problems",
+    "downsample_cycle",
+    "format_summary",
+    "load_cycle_file",
+    "load_raw_metadata",
+    "parse_start_time",
+    "process_cycle",
+    "run_pipeline",
+    "split_train_held_out",
+    "truncate_at_cutoff",
+]
+
 _NUMBER_RE = re.compile(r"\d+\.?\d*(?:[eE][+-]?\d+)?")
 _TIME_COMPONENTS = ["y", "m", "d", "hr", "mi", "sec"]
 

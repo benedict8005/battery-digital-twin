@@ -7,6 +7,11 @@ import os
 from battery_pinn import config, synthetic
 from battery_pinn.data import load_dataset
 
+__all__ = [
+    "build_parser",
+    "main",
+]
+
 
 def _cmd_convert_mat(args):
     from battery_pinn.nasa_mat import convert_mat_dir
