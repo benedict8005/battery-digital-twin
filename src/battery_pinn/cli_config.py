@@ -12,6 +12,7 @@ Values from the file only replace the defaults of that command; a flag given on 
 
 import argparse
 import os
+import sys
 from typing import Any
 
 from battery_pinn.validation import DataValidationError
@@ -33,10 +34,10 @@ def load_config_file(path: str) -> dict[str, dict[str, Any]]:
     ext = os.path.splitext(path)[1].lower()
     try:
         if ext == ".toml":
-            try:
+            if sys.version_info >= (3, 11):
                 import tomllib
-            except ModuleNotFoundError:  # Python 3.10
-                import tomli as tomllib  # type: ignore[no-redef]
+            else:  # Python 3.10
+                import tomli as tomllib
             with open(path, "rb") as fh:
                 raw = tomllib.load(fh)
         elif ext in (".yaml", ".yml"):
