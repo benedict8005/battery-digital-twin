@@ -16,10 +16,11 @@ dependencies = [
     "pandas",
     "scipy",
     "matplotlib",
+    "tomli; python_version < '3.11'",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "hypothesis", "pytest-cov", "ruff", "mypy", "pandas-stubs", "scipy-stubs"]
+dev = ["pytest", "hypothesis", "pytest-cov", "ruff", "mypy", "pandas-stubs", "scipy-stubs", "pyyaml", "types-PyYAML"]
 
 [project.scripts]
 battery-pinn = "battery_pinn.cli:main"

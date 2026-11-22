@@ -14,6 +14,7 @@ PACKAGE = pathlib.Path(__file__).resolve().parents[1] / "src" / "battery_pinn"
 DECLARED = [
     "checkpoint",
     "cli",
+    "cli_config",
     "config",
     "data",
     "device",

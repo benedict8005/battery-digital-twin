@@ -3,9 +3,12 @@
 import argparse
 import glob
 import os
+import sys
 
 from battery_pinn import config, synthetic
+from battery_pinn.cli_config import apply_config
 from battery_pinn.data import load_dataset
+from battery_pinn.validation import DataValidationError
 
 __all__ = [
     "build_parser",
@@ -487,11 +490,33 @@ def build_parser():
     d.add_argument("--lbfgs-iterations", type=int, default=0)
     d.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     d.set_defaults(func=_cmd_demo)
+
+    for command in sub.choices.values():
+        command.add_argument(
+            "--config",
+            metavar="FILE",
+            default=None,
+            help="read option defaults from a TOML or YAML file with one [command] table; flags still win",
+        )
     return p
 
 
+def _config_path(argv):
+    """Return the value of ``--config`` in ``argv`` (or None) without parsing anything else."""
+    pre = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    pre.add_argument("--config", default=None)
+    return pre.parse_known_args(argv)[0].config
+
+
 def main(argv=None):
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    path = _config_path(sys.argv[1:] if argv is None else argv)
+    if path is not None:
+        try:
+            apply_config(parser, path)
+        except DataValidationError as exc:
+            parser.exit(2, f"{parser.prog}: error: {exc}\n")
+    args = parser.parse_args(argv)
     args.func(args)
 
 
