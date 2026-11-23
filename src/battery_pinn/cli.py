@@ -8,6 +8,7 @@ import sys
 from battery_pinn import config, synthetic
 from battery_pinn.cli_config import apply_config
 from battery_pinn.data import load_dataset
+from battery_pinn.logging_setup import configure_logging
 from battery_pinn.validation import DataValidationError
 
 __all__ = [
@@ -492,6 +493,9 @@ def build_parser():
     d.set_defaults(func=_cmd_demo)
 
     for command in sub.choices.values():
+        noise = command.add_mutually_exclusive_group()
+        noise.add_argument("-v", "--verbose", action="store_true", help="also print debug messages (to stderr)")
+        noise.add_argument("-q", "--quiet", action="store_true", help="print only warnings and errors (to stderr)")
         command.add_argument(
             "--config",
             metavar="FILE",
@@ -517,6 +521,7 @@ def main(argv=None):
         except DataValidationError as exc:
             parser.exit(2, f"{parser.prog}: error: {exc}\n")
     args = parser.parse_args(argv)
+    configure_logging(verbose=args.verbose, quiet=args.quiet)
     args.func(args)
 
 
