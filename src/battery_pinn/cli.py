@@ -2,6 +2,7 @@
 
 import argparse
 import glob
+import logging
 import os
 import sys
 
@@ -10,6 +11,8 @@ from battery_pinn.cli_config import apply_config
 from battery_pinn.data import load_dataset
 from battery_pinn.logging_setup import configure_logging
 from battery_pinn.validation import DataValidationError
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "build_parser",
@@ -70,8 +73,8 @@ def _cmd_generate(args):
     os.makedirs(args.out, exist_ok=True)
     train.to_csv(os.path.join(args.out, "train.csv"), index=False)
     held_out.to_csv(os.path.join(args.out, "held_out.csv"), index=False)
-    print(f"Wrote {len(train)} train rows and {len(held_out)} held-out rows to {args.out}")
-    print("NOTE: synthetic data, not NASA measurements.")
+    logger.info("Wrote %d train rows and %d held-out rows to %s", len(train), len(held_out), args.out)
+    logger.info("NOTE: synthetic data, not NASA measurements.")
 
 
 def _cmd_train(args):
@@ -170,7 +173,7 @@ def _cmd_abuse(args):
         )
     plot_path = os.path.join(args.checkpoints, "abuse_test.png")
     plot_abuse_test(results, plot_path)
-    print(f"Saved plot to {plot_path} and abuse_test_summary.json")
+    logger.info("Saved plot to %s and abuse_test_summary.json", plot_path)
 
 
 def _cmd_inspect(args):

@@ -81,3 +81,14 @@ def test_config_file_can_set_quiet(tmp_path, capsys):
     cfg.write_text("[simulate]\nquiet = true\n")
     main([*SIM, "--config", str(cfg)])
     assert logging.getLogger(LOGGER_NAME).level == logging.WARNING
+
+
+def test_generate_data_status_goes_to_stderr_and_quiet_silences_it(tmp_path, capsys):
+    main(["generate-data", "--out", str(tmp_path / "a"), "--batteries", "3", "--held-out", "1", "--cycles", "3"])
+    first = capsys.readouterr()
+    assert "Wrote" in first.err and "synthetic data" in first.err
+    assert first.out == ""
+    main(["generate-data", "--out", str(tmp_path / "b"), "--batteries", "3", "--held-out", "1", "--cycles", "3", "-q"])
+    quiet = capsys.readouterr()
+    assert quiet.err == "" and quiet.out == ""
+    assert (tmp_path / "b" / "train.csv").is_file()
