@@ -2,6 +2,7 @@
 
 import argparse
 import glob
+import json
 import logging
 import os
 import sys
@@ -125,8 +126,6 @@ def _cmd_evaluate(args):
 
 
 def _cmd_abuse(args):
-    import json
-
     from battery_pinn.inference import (
         CRITERIA,
         DigitalTwin,
@@ -211,6 +210,20 @@ def _cmd_simulate(args):
     else:
         x, t, temp, stab = solve_heat_sei(args.duration, args.ambient, 10.0**args.log_a_sei, source, **kwargs)
         stability = stab[-1]
+    if args.json:
+        result = {
+            "command": "simulate",
+            "heat_source_w_per_m3": source,
+            "ambient_c": args.ambient,
+            "duration_s": args.duration,
+            "x": [float(v) for v in x],
+            "temperature_c": [float(v) for v in temp[-1]],
+        }
+        if stability is not None:
+            result["log_a_sei"] = args.log_a_sei
+            result["sei_stability"] = [float(v) for v in stability]
+        print(json.dumps(result))
+        return
     print(f"# heat source {source:.6g} W/m3, ambient {args.ambient:g} C, {args.duration:g} s")
     if stability is None:
         print("# x (normalised), temperature (C) at the final time")
@@ -485,6 +498,7 @@ def build_parser():
         default=None,
         help="log10 of the SEI pre-exponential factor; adds SEI decay and its heat and prints c",
     )
+    sm.add_argument("--json", action="store_true", help="print one JSON object instead of the text table")
     sm.set_defaults(func=_cmd_simulate)
 
     d = sub.add_parser("demo", help="generate data, train briefly, evaluate, abuse-test")
