@@ -175,12 +175,23 @@ def _cmd_abuse(args):
     logger.info("Saved plot to %s and abuse_test_summary.json", plot_path)
 
 
+def _json_default(value):
+    """Let ``json.dumps`` write numpy scalars and arrays found in report dictionaries."""
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    raise TypeError(f"cannot write {type(value).__name__} as JSON")
+
+
 def _cmd_inspect(args):
     from battery_pinn.etl import format_summary
     from battery_pinn.report import format_report, inspect_file, inspect_raw
 
     if args.raw:
-        print(format_summary(inspect_raw(args.raw)))
+        summary = inspect_raw(args.raw)
+        if args.json:
+            print(json.dumps({"command": "inspect-data", "raw": args.raw, "summary": summary}, default=_json_default))
+        else:
+            print(format_summary(summary))
         return
     paths = (
         [args.data]
@@ -190,8 +201,12 @@ def _cmd_inspect(args):
     missing = [p for p in paths if not os.path.isfile(p)]
     if missing:
         raise SystemExit(f"No such data file: {', '.join(missing)}. Run `prepare-data` first.")
-    for path in paths:
-        print(format_report(inspect_file(path), title=path))
+    reports = {path: inspect_file(path) for path in paths}
+    if args.json:
+        print(json.dumps({"command": "inspect-data", "reports": reports}, default=_json_default))
+        return
+    for path, report in reports.items():
+        print(format_report(report, title=path))
 
 
 def _cmd_simulate(args):
@@ -347,6 +362,7 @@ def build_parser():
         default=None,
         help="instead, report which cycles of this raw per-cycle CSV folder prepare-data would skip, and why",
     )
+    ins.add_argument("--json", action="store_true", help="print one JSON object instead of the text report")
     ins.set_defaults(func=_cmd_inspect)
 
     g = sub.add_parser("generate-data", help="write a synthetic train/held-out dataset")

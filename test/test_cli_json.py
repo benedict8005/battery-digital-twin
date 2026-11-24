@@ -43,3 +43,29 @@ def test_json_flag_can_come_from_a_config_file(tmp_path, capsys):
     cfg = tmp_path / "run.toml"
     cfg.write_text("[simulate]\ncurrent = 3\nambient = 30\nduration = 120\nn-x = 5\nn-t = 20\njson = true\n")
     assert json.loads(run(capsys, ["simulate", "--config", str(cfg)])) == json.loads(run(capsys, [*BASE, "--json"]))
+
+
+def test_inspect_data_json_matches_the_report_of_each_file(tmp_path, capsys):
+    from battery_pinn import config, report
+    from test_report import make_table
+
+    make_table().to_csv(tmp_path / config.TRAIN_FILE, index=False)
+    make_table().to_csv(tmp_path / config.HELD_OUT_FILE, index=False)
+    data = json.loads(run(capsys, ["inspect-data", "--data", str(tmp_path), "--json"]))
+    assert data["command"] == "inspect-data"
+    assert len(data["reports"]) == 2
+    one = data["reports"][str(tmp_path / config.TRAIN_FILE)]
+    assert one["rows"] == 11
+    assert one["columns"]["SoH"]["missing"] == 1
+    assert one["dropped"] == json.loads(json.dumps(report.inspect_file(tmp_path / config.TRAIN_FILE)["dropped"]))
+    assert one["dropped"]["B2"]["SoH"] == [1]
+
+
+def test_inspect_data_raw_json_carries_the_skip_counts(raw_dataset, capsys):
+    from battery_pinn import report
+
+    data = json.loads(run(capsys, ["inspect-data", "--raw", raw_dataset, "--json"]))
+    expected = report.inspect_raw(raw_dataset)
+    assert data["summary"]["skip_counts"] == expected["skip_counts"]
+    assert data["summary"]["total_kept"] == expected["total_kept"] == 13
+    assert data["summary"]["skip_counts"] == {"file_not_found": 1, "too_short": 2, "low_capacity": 3}
