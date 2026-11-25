@@ -16,9 +16,29 @@ from battery_pinn.validation import DataValidationError
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "EXIT_DATA",
+    "EXIT_MISSING",
+    "EXIT_OK",
+    "EXIT_USAGE",
+    "MissingInputError",
     "build_parser",
     "main",
 ]
+
+#: Exit codes. Any other uncaught exception is a bug and ends with Python's default 1 and a traceback.
+EXIT_OK = 0
+EXIT_USAGE = 2  # bad flags or config file (argparse's own code)
+EXIT_DATA = 3  # a data file failed validation (DataValidationError)
+EXIT_MISSING = 4  # an input the command needs does not exist yet (data file, checkpoints)
+
+
+class MissingInputError(SystemExit):
+    """An input the command needs is absent; ends the process with :data:`EXIT_MISSING`."""
+
+    def __init__(self, message):
+        super().__init__(message)
+        self.message = message
+        self.code = EXIT_MISSING
 
 
 def _cmd_convert_mat(args):
@@ -105,7 +125,7 @@ def _cmd_train(args):
 def _checkpoints(out_dir):
     paths = sorted(glob.glob(os.path.join(out_dir, "battery_pinn_model_seed*.pt")))
     if not paths:
-        raise SystemExit(f"No checkpoints found in {out_dir}. Run `train` first.")
+        raise MissingInputError(f"No checkpoints found in {out_dir}. Run `train` first.")
     return paths
 
 
@@ -138,7 +158,7 @@ def _cmd_abuse(args):
     train_df = load_dataset(args.data)
     paths = _checkpoints(args.checkpoints)
     if len(paths) < args.min_models:
-        raise SystemExit(
+        raise MissingInputError(
             f"{len(paths)} checkpoint(s) in {args.checkpoints}; the ensemble verdict needs at least "
             f"{args.min_models} (train more seeds, or pass --min-models)."
         )
@@ -200,7 +220,7 @@ def _cmd_inspect(args):
     )
     missing = [p for p in paths if not os.path.isfile(p)]
     if missing:
-        raise SystemExit(f"No such data file: {', '.join(missing)}. Run `prepare-data` first.")
+        raise MissingInputError(f"No such data file: {', '.join(missing)}. Run `prepare-data` first.")
     reports = {path: inspect_file(path) for path in paths}
     if args.json:
         print(json.dumps({"command": "inspect-data", "reports": reports}, default=_json_default))
@@ -552,10 +572,17 @@ def main(argv=None):
         try:
             apply_config(parser, path)
         except DataValidationError as exc:
-            parser.exit(2, f"{parser.prog}: error: {exc}\n")
+            parser.exit(EXIT_USAGE, f"{parser.prog}: error: {exc}\n")
     args = parser.parse_args(argv)
     configure_logging(verbose=args.verbose, quiet=args.quiet)
-    args.func(args)
+    try:
+        args.func(args)
+    except DataValidationError as exc:
+        print(f"{parser.prog}: error: {exc}", file=sys.stderr)
+        raise SystemExit(EXIT_DATA) from None
+    except MissingInputError as exc:
+        print(f"{parser.prog}: error: {exc.message}", file=sys.stderr)
+        raise
 
 
 if __name__ == "__main__":
