@@ -1,5 +1,7 @@
 """Every exit code of the command line, checked through ``main`` and through a real process."""
 
+import os
+import pathlib
 import subprocess
 import sys
 
@@ -7,6 +9,8 @@ import pytest
 
 from battery_pinn import cli
 from battery_pinn.cli import EXIT_DATA, EXIT_MISSING, EXIT_OK, EXIT_USAGE, main
+
+SRC = str(pathlib.Path(__file__).resolve().parents[1] / "src")
 
 SIM = ["simulate", "--duration", "60", "--n-x", "5", "--n-t", "10"]
 
@@ -77,7 +81,11 @@ def test_missing_checkpoints_exit_4_for_evaluate_and_abuse_test(tmp_path, capsys
 
 def test_exit_code_reaches_the_operating_system(tmp_path):
     def run(*argv):
-        return subprocess.run([sys.executable, "-m", "battery_pinn", *argv], capture_output=True, text=True)
+        # The package is found through pytest's pythonpath setting, which a child process does not inherit.
+        env = {**os.environ, "PYTHONPATH": os.pathsep.join([SRC, os.environ.get("PYTHONPATH", "")]).rstrip(os.pathsep)}
+        return subprocess.run(
+            [sys.executable, "-m", "battery_pinn", *argv], capture_output=True, text=True, env=env, cwd=tmp_path
+        )
 
     assert run(*SIM).returncode == 0
     assert run("simulate", "--bogus").returncode == EXIT_USAGE
