@@ -297,6 +297,18 @@ loss settings, abuse-test thresholds, the battery lists (`TARGET_BATTERIES`,
 thresholds, table names, default paths and the default training protocol
 (`TRAIN_DEFAULTS`). It imports only the standard library.
 
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | the command succeeded (also `--help`) |
+| 1 | unexpected error (a bug); Python prints a traceback |
+| 2 | bad flags or config file |
+| 3 | a data file failed validation; the message names the file, column and row |
+| 4 | a needed input is missing (processed table, checkpoints); the message says which command to run first |
+
+Errors go to stderr; results stay on stdout.
+
 ## Troubleshooting
 
 - **`No matching distribution found for torch` (`from versions: none`):** your Python is too old
