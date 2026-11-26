@@ -386,17 +386,30 @@ def build_parser():
     ins.set_defaults(func=_cmd_inspect)
 
     g = sub.add_parser("generate-data", help="write a synthetic train/held-out dataset")
-    g.add_argument("--out", default=config.DEFAULT_SYNTHETIC_DIR)
-    g.add_argument("--batteries", type=int, default=8)
-    g.add_argument("--held-out", type=int, default=2)
-    g.add_argument("--cycles", type=int, default=12)
-    g.add_argument("--seed", type=int, default=0)
+    g.add_argument(
+        "--out",
+        default=config.DEFAULT_SYNTHETIC_DIR,
+        help="folder to write train.csv and held_out.csv into (default: %(default)s)",
+    )
+    g.add_argument(
+        "--batteries", type=int, default=8, help="number of synthetic batteries in total (default: %(default)s)"
+    )
+    g.add_argument(
+        "--held-out",
+        type=int,
+        default=2,
+        help="how many of those batteries go to the held-out file (default: %(default)s)",
+    )
+    g.add_argument("--cycles", type=int, default=12, help="cycles per battery (default: %(default)s)")
+    g.add_argument("--seed", type=int, default=0, help="random seed of the generator (default: %(default)s)")
     g.set_defaults(func=_cmd_generate)
 
     t = sub.add_parser("train", help="train one model per seed")
     d_ = config.TRAIN_DEFAULTS
-    t.add_argument("--data", default=config.DEFAULT_TRAIN_CSV)
-    t.add_argument("--out", default=config.DEFAULT_ARTIFACTS_DIR)
+    t.add_argument("--data", default=config.DEFAULT_TRAIN_CSV, help="processed training table (default: %(default)s)")
+    t.add_argument(
+        "--out", default=config.DEFAULT_ARTIFACTS_DIR, help="folder for the checkpoints and logs (default: %(default)s)"
+    )
     t.add_argument(
         "--seeds",
         type=int,
@@ -416,8 +429,18 @@ def build_parser():
         default=d_["lbfgs_iterations"],
         help="L-BFGS iterations, 0 disables (default: %(default)s; the notebook used 2000)",
     )
-    t.add_argument("--num-domain", type=int, default=d_["num_domain"])
-    t.add_argument("--num-boundary", type=int, default=d_["num_boundary"])
+    t.add_argument(
+        "--num-domain",
+        type=int,
+        default=d_["num_domain"],
+        help="random PDE collocation points inside the domain (default: %(default)s)",
+    )
+    t.add_argument(
+        "--num-boundary",
+        type=int,
+        default=d_["num_boundary"],
+        help="collocation points on the boundary (default: %(default)s)",
+    )
     t.add_argument(
         "--num-initial",
         type=int,
@@ -479,9 +502,15 @@ def build_parser():
     t.set_defaults(func=_cmd_train)
 
     e = sub.add_parser("evaluate", help="train vs held-out temperature error")
-    e.add_argument("--checkpoints", default=config.DEFAULT_ARTIFACTS_DIR)
-    e.add_argument("--data", default=config.DEFAULT_TRAIN_CSV)
-    e.add_argument("--held-out-data", default=config.DEFAULT_HELD_OUT_CSV)
+    e.add_argument(
+        "--checkpoints",
+        default=config.DEFAULT_ARTIFACTS_DIR,
+        help="folder of trained checkpoints (default: %(default)s)",
+    )
+    e.add_argument("--data", default=config.DEFAULT_TRAIN_CSV, help="processed training table (default: %(default)s)")
+    e.add_argument(
+        "--held-out-data", default=config.DEFAULT_HELD_OUT_CSV, help="processed held-out table (default: %(default)s)"
+    )
     e.add_argument(
         "--held-out-batteries",
         nargs="+",
@@ -501,7 +530,11 @@ def build_parser():
         help=f"ambient-stress sweep verdict over an ensemble of seeds "
         f"(core temperature unvalidated; verdict excludes ambient > {config.AMBIENT_TRAINED_MAX_C:.0f} C)",
     )
-    a.add_argument("--checkpoints", default=config.DEFAULT_ARTIFACTS_DIR)
+    a.add_argument(
+        "--checkpoints",
+        default=config.DEFAULT_ARTIFACTS_DIR,
+        help="folder of trained checkpoints (default: %(default)s)",
+    )
     a.add_argument(
         "--data",
         default=config.DEFAULT_TRAIN_CSV,
@@ -526,7 +559,12 @@ def build_parser():
     sm.add_argument("--duration", type=float, default=600.0, help="simulated time in seconds")
     sm.add_argument("--n-x", type=int, default=11, help="number of space grid points")
     sm.add_argument("--n-t", type=int, default=200, help="number of time steps")
-    sm.add_argument("--boundary", choices=("neumann", "dirichlet"), default="neumann")
+    sm.add_argument(
+        "--boundary",
+        choices=("neumann", "dirichlet"),
+        default="neumann",
+        help="end conditions: insulated (neumann) or held at ambient (dirichlet) (default: %(default)s)",
+    )
     sm.add_argument("--newton-cooling", action="store_true", help="add the Newton surface-cooling sink")
     sm.add_argument(
         "--log-a-sei",
@@ -538,11 +576,22 @@ def build_parser():
     sm.set_defaults(func=_cmd_simulate)
 
     d = sub.add_parser("demo", help="generate data, train briefly, evaluate, abuse-test")
-    d.add_argument("--workdir", default=".")
-    d.add_argument("--seeds", type=int, nargs="+", default=[0, 1])
-    d.add_argument("--iterations", type=int, default=1000)
-    d.add_argument("--lbfgs-iterations", type=int, default=0)
-    d.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    d.add_argument(
+        "--workdir", default=".", help="folder the demo writes its data and checkpoints into (default: %(default)s)"
+    )
+    d.add_argument(
+        "--seeds", type=int, nargs="+", default=[0, 1], help="seeds to train, one model each (default: %(default)s)"
+    )
+    d.add_argument("--iterations", type=int, default=1000, help="Adam iterations per model (default: %(default)s)")
+    d.add_argument(
+        "--lbfgs-iterations", type=int, default=0, help="L-BFGS iterations, 0 disables (default: %(default)s)"
+    )
+    d.add_argument(
+        "--device",
+        choices=("auto", "cpu", "cuda"),
+        default="auto",
+        help="auto = CUDA when it works, else CPU (default: %(default)s)",
+    )
     d.set_defaults(func=_cmd_demo)
 
     for command in sub.choices.values():
