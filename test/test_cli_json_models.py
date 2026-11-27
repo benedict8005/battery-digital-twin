@@ -73,6 +73,8 @@ def test_abuse_test_json_has_summary_and_models_and_no_text(workdir, capsys):
 
 def test_json_flag_can_come_from_a_config_file(workdir, tmp_path_factory, capsys):
     cfg = tmp_path_factory.mktemp("cfg") / "run.toml"
-    cfg.write_text(f'[abuse-test]\ncheckpoints = "{workdir}"\ndata = "{workdir / "train.csv"}"\njson = true\n')
+    # as_posix(): backslashes in a Windows path would be read as TOML escape sequences.
+    checkpoints, data = workdir.as_posix(), (workdir / "train.csv").as_posix()
+    cfg.write_text(f'[abuse-test]\ncheckpoints = "{checkpoints}"\ndata = "{data}"\njson = true\n')
     main(["abuse-test", "--config", str(cfg)])
     assert json.loads(capsys.readouterr().out)["command"] == "abuse-test"
