@@ -1,6 +1,7 @@
 """Command-line interface: convert-mat, prepare-data, inspect-data, generate-data, train, evaluate, abuse-test, simulate, demo."""
 
 import argparse
+import contextlib
 import glob
 import json
 import logging
@@ -129,20 +130,39 @@ def _checkpoints(out_dir):
     return paths
 
 
+def _quiet_stdout(as_json):
+    """In ``--json`` mode the loaders' coverage notes go to stderr so stdout stays one JSON object."""
+    return contextlib.redirect_stdout(sys.stderr) if as_json else contextlib.nullcontext()
+
+
 def _cmd_evaluate(args):
     from battery_pinn.inference import DigitalTwin, evaluate
 
-    train_df = load_dataset(args.data)
-    held_out_df = load_dataset(args.held_out_data, expected_batteries=_held_out_expectation(args))
+    as_json = getattr(args, "json", False)
+    with _quiet_stdout(as_json):
+        train_df = load_dataset(args.data)
+        held_out_df = load_dataset(args.held_out_data, expected_batteries=_held_out_expectation(args))
+    models = {}
     for path in _checkpoints(args.checkpoints):
         twin = DigitalTwin(path)
         tr, ho = evaluate(twin, train_df), evaluate(twin, held_out_df)
+        models[os.path.basename(path)] = {"train": tr, "held_out": ho}
+        if as_json:
+            continue
         print(
             f"{os.path.basename(path)}: train MAE {tr['mae_c']:.2f} C / RMSE {tr['rmse_c']:.2f} C | "
             f"held-out MAE {ho['mae_c']:.2f} C / RMSE {ho['rmse_c']:.2f} C"
         )
         for bid, mae in ho["per_battery_mae_c"].items():
             print(f"    {bid}: MAE {mae:.2f} C")
+    if as_json:
+        print(json.dumps({"command": "evaluate", "models": models}, default=_json_default))
+
+
+def _abuse_models(results):
+    """The per-model fields that go into the summary file and the ``--json`` output."""
+    keep = ("verdict", "criterion", "core_temp_max_c", "sei_min", "threshold")
+    return {k: {kk: v for kk, v in r.items() if kk in keep} for k, r in results.items()}
 
 
 def _cmd_abuse(args):
@@ -155,7 +175,9 @@ def _cmd_abuse(args):
         summarise_ensemble,
     )
 
-    train_df = load_dataset(args.data)
+    as_json = getattr(args, "json", False)
+    with _quiet_stdout(as_json):
+        train_df = load_dataset(args.data)
     paths = _checkpoints(args.checkpoints)
     if len(paths) < args.min_models:
         raise MissingInputError(
@@ -167,25 +189,20 @@ def _cmd_abuse(args):
         name = os.path.basename(path).replace("battery_pinn_model_", "").replace(".pt", "")
         r = abuse_test(DigitalTwin(path), train_df)
         results[name] = r
-        print(
-            f"{name}: {r['verdict']} -- {CRITERIA[r['criterion']]} (core temp max {r['core_temp_max_c']:.1f} C "
-            f"[unvalidated], SEI min {r['sei_min']:.3f}, threshold {r['threshold']:.3f})"
-        )
+        if not as_json:
+            print(
+                f"{name}: {r['verdict']} -- {CRITERIA[r['criterion']]} (core temp max {r['core_temp_max_c']:.1f} C "
+                f"[unvalidated], SEI min {r['sei_min']:.3f}, threshold {r['threshold']:.3f})"
+            )
     summary = summarise_ensemble(results)
-    print(format_ensemble_summary(summary))
+    if not as_json:
+        print(format_ensemble_summary(summary))
     os.makedirs(args.checkpoints, exist_ok=True)
     with open(os.path.join(args.checkpoints, "abuse_test_summary.json"), "w") as f:
         json.dump(
             {
                 "summary": summary,
-                "models": {
-                    k: {
-                        kk: v
-                        for kk, v in r.items()
-                        if kk in ("verdict", "criterion", "core_temp_max_c", "sei_min", "threshold")
-                    }
-                    for k, r in results.items()
-                },
+                "models": _abuse_models(results),
             },
             f,
             indent=2,
@@ -193,6 +210,12 @@ def _cmd_abuse(args):
     plot_path = os.path.join(args.checkpoints, "abuse_test.png")
     plot_abuse_test(results, plot_path)
     logger.info("Saved plot to %s and abuse_test_summary.json", plot_path)
+    if as_json:
+        print(
+            json.dumps(
+                {"command": "abuse-test", "summary": summary, "models": _abuse_models(results)}, default=_json_default
+            )
+        )
 
 
 def _json_default(value):
@@ -523,6 +546,7 @@ def build_parser():
         action="store_true",
         help="skip that check (for synthetic data, whose battery IDs are not designated)",
     )
+    e.add_argument("--json", action="store_true", help="print one JSON object instead of the text lines")
     e.set_defaults(func=_cmd_evaluate)
 
     a = sub.add_parser(
@@ -547,6 +571,7 @@ def build_parser():
         help=f"refuse to run with fewer checkpoints than this (the intended ensemble is "
         f"{config.ABUSE_ENSEMBLE_SIZE} seeds)",
     )
+    a.add_argument("--json", action="store_true", help="print one JSON object instead of the text verdicts")
     a.set_defaults(func=_cmd_abuse)
 
     sm = sub.add_parser(
