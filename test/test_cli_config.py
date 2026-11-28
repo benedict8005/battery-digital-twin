@@ -116,6 +116,7 @@ def test_config_reproduces_generate_data_and_inspect_data(tmp_path, capsys):
     from_flags = capsys.readouterr().out
     assert "rows" in from_flags
     cfg = tmp_path / "inspect.toml"
-    cfg.write_text(f'[inspect-data]\ndata = "{by_flags.as_posix()}"\n')
+    # A TOML literal string ('...') keeps Windows backslashes as they are, so both runs print the same paths.
+    cfg.write_text(f"[inspect-data]\ndata = '{by_flags}'\n")
     main(["inspect-data", "--config", str(cfg)])
     assert capsys.readouterr().out == from_flags
