@@ -96,3 +96,26 @@ def test_help_documents_the_config_option(capsys):
     with pytest.raises(SystemExit):
         main(["simulate", "--help"])
     assert "--config FILE" in capsys.readouterr().out
+
+
+def test_config_reproduces_generate_data_and_inspect_data(tmp_path, capsys):
+    """The same equivalence as for ``simulate``, for a command that writes files and one that reports on them."""
+    by_flags, by_config = tmp_path / "flags", tmp_path / "config"
+    shape = ["--batteries", "3", "--held-out", "1", "--cycles", "4", "--seed", "5"]
+    main(["generate-data", "--out", str(by_flags), *shape])
+    cfg = tmp_path / "gen.toml"
+    cfg.write_text(
+        f'[generate-data]\nout = "{by_config.as_posix()}"\nbatteries = 3\nheld-out = 1\ncycles = 4\nseed = 5\n'
+    )
+    main(["generate-data", "--config", str(cfg)])
+    capsys.readouterr()
+    for name in ("train.csv", "held_out.csv"):
+        assert (by_flags / name).read_bytes() == (by_config / name).read_bytes()
+
+    main(["inspect-data", "--data", str(by_flags)])
+    from_flags = capsys.readouterr().out
+    assert "rows" in from_flags
+    cfg = tmp_path / "inspect.toml"
+    cfg.write_text(f'[inspect-data]\ndata = "{by_flags.as_posix()}"\n')
+    main(["inspect-data", "--config", str(cfg)])
+    assert capsys.readouterr().out == from_flags
