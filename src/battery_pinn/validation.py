@@ -11,6 +11,11 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 
+__all__ = [
+    "DataValidationError",
+    "check_processed_table",
+]
+
 
 class DataValidationError(ValueError):
     """Input data is missing, truncated or inconsistent; the message says where."""

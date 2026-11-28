@@ -17,6 +17,15 @@ from battery_pinn.interpolation import DischargeProfile
 from battery_pinn.ocv import fit_ocv_coeffs
 from battery_pinn.physics import make_pde, make_thermal_variables, recommended_log_a_sei
 
+__all__ = [
+    "LossTermLogger",
+    "loss_breakdown",
+    "predict",
+    "select_anchor_subset",
+    "train_ensemble",
+    "train_one_seed",
+]
+
 
 class LossTermLogger(dde.callbacks.Callback):
     """Record the weighted loss terms and log10(A_sei) every ``period`` steps.

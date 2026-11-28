@@ -8,6 +8,19 @@ from battery_pinn.checkpoint import load_checkpoint
 from battery_pinn.data import build_points_and_targets
 from battery_pinn.training import predict
 
+__all__ = [
+    "CAVEATS",
+    "CRITERIA",
+    "DigitalTwin",
+    "abuse_test",
+    "classify",
+    "danger_threshold",
+    "evaluate",
+    "format_ensemble_summary",
+    "plot_abuse_test",
+    "summarise_ensemble",
+]
+
 
 class DigitalTwin:
     """A restored network plus its calibrated parameters."""

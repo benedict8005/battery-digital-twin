@@ -21,6 +21,12 @@ from numpy.typing import NDArray
 
 from battery_pinn import config
 
+__all__ = [
+    "joule_source",
+    "solve_heat",
+    "solve_heat_sei",
+]
+
 FloatArray: TypeAlias = NDArray[np.float64]
 Source = float | Callable[[float], float]
 
